@@ -1,0 +1,136 @@
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users,
+  Upload,
+  Megaphone,
+  Phone,
+  CalendarClock,
+  Disc3,
+  BarChart3,
+  Settings,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+  UserCog,
+  Eye,
+  Headphones,
+  Star,
+  BarChart2,
+  MessageSquare,
+} from "lucide-react";
+import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/use-auth";
+import summitLogo from "@/assets/summit-logo.webp";
+
+interface NavItem {
+  to: string;
+  icon: typeof LayoutDashboard;
+  label: string;
+  roles: string[]; // empty = all roles
+}
+
+const allNavItems: NavItem[] = [
+  { to: "/", icon: LayoutDashboard, label: "Dashboard", roles: ["admin", "agent"] },
+  { to: "/contacts", icon: Users, label: "Contacts", roles: ["admin", "agent"] },
+  { to: "/imports", icon: Upload, label: "Imports", roles: ["admin"] },
+  { to: "/campaigns", icon: Megaphone, label: "Campaigns", roles: ["admin"] },
+  { to: "/dialer", icon: Phone, label: "Dialer", roles: ["admin", "agent"] },
+  { to: "/callbacks", icon: CalendarClock, label: "Callbacks", roles: ["admin", "agent"] },
+  { to: "/recordings", icon: Disc3, label: "Recordings", roles: ["admin"] },
+  { to: "/reports", icon: BarChart3, label: "Reports", roles: ["admin"] },
+  { to: "/users", icon: UserCog, label: "Users", roles: ["admin"] },
+  { to: "/settings", icon: Settings, label: "Settings", roles: ["admin"] },
+  { to: "/team-dashboard", icon: Headphones, label: "Team Monitor", roles: ["admin", "team_leader"] },
+  { to: "/qa-dashboard", icon: Star, label: "QA Scoring", roles: ["admin", "team_leader"] },
+  { to: "/agent-performance", icon: BarChart2, label: "Agent Perf", roles: ["admin", "team_leader"] },
+  { to: "/my-feedback", icon: MessageSquare, label: "My Feedback", roles: ["agent"] },
+  { to: "/client-portal", icon: Eye, label: "Client Portal", roles: ["client"] },
+];
+
+export default function AppSidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { role, profile } = useAuth();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
+  const navItems = allNavItems.filter(
+    (item) => item.roles.length === 0 || (role && item.roles.includes(role))
+  );
+
+  return (
+    <aside
+      className={`fixed left-0 top-0 h-screen bg-sidebar flex flex-col z-50 transition-all duration-300 border-r border-sidebar-border ${
+        collapsed ? "w-[68px]" : "w-[240px]"
+      }`}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-3 h-16 border-b border-sidebar-border">
+        <img
+          src={summitLogo}
+          alt="Summit Leads"
+          className="w-10 h-10 object-contain shrink-0"
+        />
+        {!collapsed && (
+          <span className="font-bold text-primary text-base tracking-tight">
+            Summit Leads
+          </span>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.to;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={isActive ? "sidebar-item-active" : "sidebar-item"}
+              title={item.label}
+            >
+              <item.icon className="w-5 h-5 shrink-0" />
+              {!collapsed && <span>{item.label}</span>}
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* Bottom */}
+      <div className="p-3 border-t border-sidebar-border space-y-1">
+        {!collapsed && profile && (
+          <div className="px-2 py-1 mb-2">
+            <p className="text-xs text-muted-foreground truncate">{profile.display_name || profile.email}</p>
+            <p className="text-xs text-muted-foreground/60 capitalize">{role}</p>
+          </div>
+        )}
+        <button
+          onClick={handleLogout}
+          className="sidebar-item w-full"
+          title="Logout"
+        >
+          <LogOut className="w-5 h-5 shrink-0" />
+          {!collapsed && <span>Logout</span>}
+        </button>
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="sidebar-item w-full justify-center"
+          title={collapsed ? "Expand" : "Collapse"}
+        >
+          {collapsed ? (
+            <ChevronRight className="w-5 h-5" />
+          ) : (
+            <ChevronLeft className="w-5 h-5" />
+          )}
+        </button>
+      </div>
+    </aside>
+  );
+}

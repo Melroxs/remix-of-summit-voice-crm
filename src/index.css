@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 30% 8%;
+    --foreground: 195 100% 95%;
+
+    --card: 222 25% 11%;
+    --card-foreground: 195 100% 95%;
+
+    --popover: 222 25% 11%;
+    --popover-foreground: 195 100% 95%;
+
+    --primary: 187 100% 50%;
+    --primary-foreground: 222 30% 6%;
+
+    --secondary: 222 20% 16%;
+    --secondary-foreground: 195 80% 85%;
+
+    --muted: 222 20% 15%;
+    --muted-foreground: 215 20% 55%;
+
+    --accent: 270 60% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 222 20% 18%;
+    --input: 222 20% 18%;
+    --ring: 187 100% 50%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 222 35% 6%;
+    --sidebar-foreground: 195 40% 65%;
+    --sidebar-primary: 187 100% 50%;
+    --sidebar-primary-foreground: 222 30% 6%;
+    --sidebar-accent: 222 25% 12%;
+    --sidebar-accent-foreground: 195 80% 85%;
+    --sidebar-border: 222 25% 14%;
+    --sidebar-ring: 187 100% 50%;
+    --sidebar-muted: 215 20% 45%;
+
+    --glow-cyan: 187 100% 50%;
+    --glow-purple: 270 60% 55%;
+
+    --chart-1: 187 100% 50%;
+    --chart-2: 160 84% 39%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 270 60% 55%;
+    --chart-5: 0 72% 50%;
+
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .glow-border {
+    box-shadow: 0 0 15px -3px hsl(187 100% 50% / 0.3), 0 0 30px -6px hsl(270 60% 55% / 0.15);
+  }
+
+  .stat-card {
+    @apply bg-card rounded-xl border border-border p-5 shadow-sm hover:shadow-md transition-all duration-300;
+  }
+
+  .stat-card:hover {
+    box-shadow: 0 0 20px -5px hsl(187 100% 50% / 0.15);
+    border-color: hsl(187 100% 50% / 0.3);
+  }
+
+  .sidebar-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground hover:text-[hsl(195,100%,90%)] hover:bg-sidebar-accent transition-all duration-200 text-sm font-medium;
+  }
+
+  .sidebar-item-active {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg bg-primary/15 text-primary border border-primary/20 text-sm font-medium;
+    box-shadow: 0 0 12px -3px hsl(187 100% 50% / 0.3);
+  }
+}
