@@ -195,16 +195,9 @@ export async function processImport(
   const BATCH_SIZE = 100;
 
   // Build mapped rows
-  const mappedRows: { idx: number; contact: Record<string, string | null> }[] = [];
+  const mappedRows: { idx: number; contact: Record<string, any> }[] = [];
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const contact: Record<string, string | null> = {};
-    for (const [csvHeader, fieldKey] of Object.entries(mapping)) {
-      if (fieldKey && row[csvHeader] !== undefined) {
-        contact[fieldKey] = row[csvHeader]?.trim() || null;
-      }
-    }
-    mappedRows.push({ idx: i + 2, contact }); // +2 for 1-indexed + header row
+    mappedRows.push({ idx: i + 2, contact: mapRow(rows[i], mapping) });
   }
 
   // Fetch existing phone numbers for dedup

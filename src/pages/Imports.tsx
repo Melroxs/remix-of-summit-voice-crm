@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { parseCSV, autoMapColumns, processImport, ColumnMapping } from "@/lib/csv-import";
+import { parseCSV, autoMapColumns, processImport, dryRunImport, ColumnMapping, DryRunResult } from "@/lib/csv-import";
 import ColumnMapper from "@/components/imports/ColumnMapper";
 import { useAuth } from "@/hooks/use-auth";
 import ImportDeleteDialog from "@/components/imports/ImportDeleteDialog";
@@ -27,6 +27,8 @@ export default function Imports() {
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [progress, setProgress] = useState({ processed: 0, total: 0 });
   const [result, setResult] = useState<{ successful: number; failed: number; duplicates: number } | null>(null);
+  const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
+  const [dryRunning, setDryRunning] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [deleteJob, setDeleteJob] = useState<any | null>(null);
 
@@ -68,6 +70,17 @@ export default function Imports() {
       toast({ title: "Parse error", description: "Failed to parse CSV file.", variant: "destructive" });
     }
   };
+
+  // Recompute dry-run whenever mapping changes during the mapping step
+  useEffect(() => {
+    if (step !== "mapping" || csvRows.length === 0) return;
+    let cancelled = false;
+    setDryRunning(true);
+    dryRunImport(csvRows, mapping)
+      .then((r) => { if (!cancelled) setDryRun(r); })
+      .finally(() => { if (!cancelled) setDryRunning(false); });
+    return () => { cancelled = true; };
+  }, [step, csvRows, mapping]);
 
   const handleStartImport = async () => {
     setStep("processing");
@@ -120,6 +133,7 @@ export default function Imports() {
     setMapping({});
     setFileName("");
     setResult(null);
+    setDryRun(null);
     setProgress({ processed: 0, total: 0 });
     if (fileRef.current) fileRef.current.value = "";
   };
