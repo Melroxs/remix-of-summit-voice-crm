@@ -59,6 +59,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashStats>({
     totalContacts: 0, activeCampaigns: 0, callsToday: 0,
     callbacksDue: 0, appointmentsThisWeek: 0, avgTalkTime: 0,
+    attempts7d: 0, connects7d: 0, appts7d: 0, dncCount: 0, recordingsAvailable7d: 0,
   });
   const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
   const [upcomingCallbacks, setUpcomingCallbacks] = useState<UpcomingCallback[]>([]);
@@ -72,9 +73,16 @@ export default function Dashboard() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayISO = today.toISOString();
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const sevenIso = sevenDaysAgo.toISOString();
         const agentFilter = isAgent && !isAdmin ? user.id : null;
 
-        const [contactsRes, campaignsRes, callsTodayRes, callbacksRes, appointmentsRes, recentCallsRes, upcomingCbRes] = await Promise.all([
+        const [
+          contactsRes, campaignsRes, callsTodayRes, callbacksRes, appointmentsRes,
+          recentCallsRes, upcomingCbRes,
+          calls7dRes, appts7dRes, dncRes,
+        ] = await Promise.all([
           supabase.from("contacts").select("id", { count: "exact", head: true }),
           supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "active"),
           (() => {
@@ -105,11 +113,27 @@ export default function Dashboard() {
             if (agentFilter) q = q.eq("agent_id", agentFilter);
             return q;
           })(),
+          (() => {
+            let q = supabase.from("call_attempts").select("id, outcome, call_recording_id").gte("created_at", sevenIso);
+            if (agentFilter) q = q.eq("agent_id", agentFilter);
+            return q;
+          })(),
+          (() => {
+            let q = supabase.from("appointments").select("id", { count: "exact", head: true }).gte("created_at", sevenIso);
+            if (agentFilter) q = q.eq("agent_id", agentFilter);
+            return q;
+          })(),
+          supabase.from("dnc_entries").select("id", { count: "exact", head: true }),
         ]);
 
         const callsData = callsTodayRes.data || [];
         const totalDuration = callsData.reduce((s, c) => s + (c.duration_seconds || 0), 0);
         const avgTalk = callsData.length > 0 ? Math.round(totalDuration / callsData.length) : 0;
+
+        const calls7d = calls7dRes.data || [];
+        const connectedSet = new Set(["connected", "appointment_booked", "callback_scheduled", "not_interested", "dnc_request", "already_customer", "wrong_number"]);
+        const connects7d = calls7d.filter((c: any) => connectedSet.has(c.outcome ?? "")).length;
+        const recordings7d = calls7d.filter((c: any) => c.call_recording_id).length;
 
         setStats({
           totalContacts: contactsRes.count ?? 0,
@@ -118,6 +142,11 @@ export default function Dashboard() {
           callbacksDue: callbacksRes.count ?? 0,
           appointmentsThisWeek: appointmentsRes.count ?? 0,
           avgTalkTime: avgTalk,
+          attempts7d: calls7d.length,
+          connects7d,
+          appts7d: appts7dRes.count ?? 0,
+          dncCount: dncRes.count ?? 0,
+          recordingsAvailable7d: recordings7d,
         });
 
         setRecentCalls((recentCallsRes.data || []).map((c: any) => ({
