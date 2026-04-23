@@ -138,11 +138,44 @@ export default function TrainingHub() {
     // Agent speaks first — empty transcript, agent kicks off
   }
 
-  async function sendMessage() {
-    if (!input.trim() || !active || sending) return;
-    const next: Msg[] = [...transcript, { role: "user", content: input.trim() }];
+  function speak(text: string): Promise<void> {
+    return new Promise((resolve) => {
+      try {
+        const synth = window.speechSynthesis;
+        if (!synth || !text) return resolve();
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        // Pick a natural-sounding English voice if available
+        const voices = synth.getVoices();
+        const preferred =
+          voices.find((v) => /Google US English|Samantha|Jenny|Aria/i.test(v.name)) ||
+          voices.find((v) => v.lang?.startsWith("en")) ||
+          voices[0];
+        if (preferred) utter.voice = preferred;
+        utter.rate = 1;
+        utter.pitch = 1;
+        utter.onstart = () => setAiSpeaking(true);
+        utter.onend = () => {
+          setAiSpeaking(false);
+          resolve();
+        };
+        utter.onerror = () => {
+          setAiSpeaking(false);
+          resolve();
+        };
+        synth.speak(utter);
+      } catch {
+        resolve();
+      }
+    });
+  }
+
+  async function sendMessage(spoken?: string) {
+    const text = (spoken ?? input).trim();
+    if (!text || !active || sendingRef.current) return;
+    const next: Msg[] = [...transcriptRef.current, { role: "user", content: text }];
     setTranscript(next);
-    setInput("");
+    if (!spoken) setInput("");
     setSending(true);
 
     try {
@@ -159,6 +192,10 @@ export default function TrainingHub() {
         .update({ transcript: updated as never })
         .eq("id", active);
 
+      if (mode === "voice" && reply) {
+        await speak(reply);
+      }
+
       if (data?.reply?.includes("[APPOINTMENT_BOOKED]")) {
         toast({ title: "🎉 Appointment booked!", description: "Wrapping up the call..." });
         setTimeout(() => endCall(updated), 800);
@@ -170,6 +207,85 @@ export default function TrainingHub() {
       setSending(false);
     }
   }
+
+  function startListening() {
+    if (!voiceSupported || listening) return;
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      toast({
+        title: "Voice not supported",
+        description: "Use Chrome or Edge for voice mode, or switch to text mode.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Stop any AI speech so the mic doesn't pick it up
+    window.speechSynthesis?.cancel();
+    setAiSpeaking(false);
+
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+
+    let finalText = "";
+    rec.onresult = (e: any) => {
+      let interimText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interimText += r[0].transcript;
+      }
+      setInterim(interimText);
+    };
+    rec.onerror = (e: any) => {
+      setListening(false);
+      setInterim("");
+      if (e.error !== "no-speech" && e.error !== "aborted") {
+        toast({
+          title: "Mic error",
+          description: e.error || "Could not capture audio",
+          variant: "destructive",
+        });
+      }
+    };
+    rec.onend = () => {
+      setListening(false);
+      setInterim("");
+      const said = finalText.trim();
+      if (said) sendMessage(said);
+    };
+
+    recognitionRef.current = rec;
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  }
+
+  function stopListening() {
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* noop */
+    }
+  }
+
+  // Cleanup speech on unmount / call end
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+      try {
+        recognitionRef.current?.abort();
+      } catch {
+        /* noop */
+      }
+    };
+  }, []);
 
   async function endCall(finalTranscript?: Msg[]) {
     if (!active) return;
