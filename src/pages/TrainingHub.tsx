@@ -443,14 +443,21 @@ export default function TrainingHub() {
             <>
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-sm font-medium">Live with AI prospect</span>
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span className="text-sm font-medium">
+                    {mode === "voice" ? "Live voice call" : "Live with AI prospect"}
+                  </span>
                   <Badge variant="outline" className="text-xs">
                     {SCENARIOS.find((s) => s.value === scenario)?.label}
                   </Badge>
                   <Badge variant="outline" className="text-xs capitalize">
                     {difficulty}
                   </Badge>
+                  {aiSpeaking && (
+                    <Badge variant="outline" className="text-xs">
+                      <Volume2 className="w-3 h-3 mr-1" /> Speaking
+                    </Badge>
+                  )}
                 </div>
                 <Button
                   size="sm"
@@ -466,7 +473,9 @@ export default function TrainingHub() {
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
                 {transcript.length === 0 && (
                   <div className="text-center text-sm text-muted-foreground py-8">
-                    Type your opening line below — you're calling the prospect.
+                    {mode === "voice"
+                      ? "Tap the mic and say your opening line — the prospect will reply out loud."
+                      : "Type your opening line below — you're calling the prospect."}
                   </div>
                 )}
                 {transcript.map((m, i) => (
@@ -488,6 +497,14 @@ export default function TrainingHub() {
                     </div>
                   </div>
                 ))}
+                {listening && interim && (
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] px-3 py-2 rounded-2xl rounded-br-sm text-sm bg-primary/30 text-foreground italic">
+                      <div className="text-[10px] opacity-70 mb-0.5">You (listening…)</div>
+                      {interim}
+                    </div>
+                  </div>
+                )}
                 {sending && (
                   <div className="flex justify-start">
                     <div className="bg-muted px-3 py-2 rounded-2xl rounded-bl-sm">
@@ -501,23 +518,47 @@ export default function TrainingHub() {
                 )}
               </div>
 
-              <div className="border-t border-border p-3 flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Type what you'd say on the phone..."
-                  disabled={sending}
-                />
-                <Button onClick={sendMessage} disabled={!input.trim() || sending}>
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
+              {mode === "voice" ? (
+                <div className="border-t border-border p-4 flex flex-col items-center gap-2">
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant={listening ? "destructive" : "default"}
+                    onClick={listening ? stopListening : startListening}
+                    disabled={sending || aiSpeaking}
+                    className="rounded-full w-16 h-16 p-0"
+                  >
+                    {listening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {aiSpeaking
+                      ? "Prospect is talking…"
+                      : listening
+                      ? "Listening — tap again when done"
+                      : sending
+                      ? "Thinking…"
+                      : "Tap to speak"}
+                  </span>
+                </div>
+              ) : (
+                <div className="border-t border-border p-3 flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Type what you'd say on the phone..."
+                    disabled={sending}
+                  />
+                  <Button onClick={() => sendMessage()} disabled={!input.trim() || sending}>
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </Card>
