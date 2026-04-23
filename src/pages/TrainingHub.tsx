@@ -11,7 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GraduationCap, Phone, PhoneOff, Send, Sparkles, History, Trophy } from "lucide-react";
+import {
+  GraduationCap,
+  Phone,
+  PhoneOff,
+  Send,
+  Sparkles,
+  History,
+  Trophy,
+  Mic,
+  MicOff,
+  Keyboard,
+  Volume2,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -57,7 +69,31 @@ export default function TrainingHub() {
     booked_appointment: boolean;
   } | null>(null);
 
+  // Voice mode
+  const [mode, setMode] = useState<"text" | "voice">("voice");
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState("");
+  const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef<Msg[]>([]);
+  const sendingRef = useRef(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Keep refs in sync so SpeechRecognition callbacks use fresh state
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
+
+  useEffect(() => {
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) setVoiceSupported(false);
+  }, []);
 
   useEffect(() => {
     if (user) loadHistory();
@@ -102,11 +138,44 @@ export default function TrainingHub() {
     // Agent speaks first — empty transcript, agent kicks off
   }
 
-  async function sendMessage() {
-    if (!input.trim() || !active || sending) return;
-    const next: Msg[] = [...transcript, { role: "user", content: input.trim() }];
+  function speak(text: string): Promise<void> {
+    return new Promise((resolve) => {
+      try {
+        const synth = window.speechSynthesis;
+        if (!synth || !text) return resolve();
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        // Pick a natural-sounding English voice if available
+        const voices = synth.getVoices();
+        const preferred =
+          voices.find((v) => /Google US English|Samantha|Jenny|Aria/i.test(v.name)) ||
+          voices.find((v) => v.lang?.startsWith("en")) ||
+          voices[0];
+        if (preferred) utter.voice = preferred;
+        utter.rate = 1;
+        utter.pitch = 1;
+        utter.onstart = () => setAiSpeaking(true);
+        utter.onend = () => {
+          setAiSpeaking(false);
+          resolve();
+        };
+        utter.onerror = () => {
+          setAiSpeaking(false);
+          resolve();
+        };
+        synth.speak(utter);
+      } catch {
+        resolve();
+      }
+    });
+  }
+
+  async function sendMessage(spoken?: string) {
+    const text = (spoken ?? input).trim();
+    if (!text || !active || sendingRef.current) return;
+    const next: Msg[] = [...transcriptRef.current, { role: "user", content: text }];
     setTranscript(next);
-    setInput("");
+    if (!spoken) setInput("");
     setSending(true);
 
     try {
@@ -123,6 +192,10 @@ export default function TrainingHub() {
         .update({ transcript: updated as never })
         .eq("id", active);
 
+      if (mode === "voice" && reply) {
+        await speak(reply);
+      }
+
       if (data?.reply?.includes("[APPOINTMENT_BOOKED]")) {
         toast({ title: "🎉 Appointment booked!", description: "Wrapping up the call..." });
         setTimeout(() => endCall(updated), 800);
@@ -134,6 +207,85 @@ export default function TrainingHub() {
       setSending(false);
     }
   }
+
+  function startListening() {
+    if (!voiceSupported || listening) return;
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      toast({
+        title: "Voice not supported",
+        description: "Use Chrome or Edge for voice mode, or switch to text mode.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Stop any AI speech so the mic doesn't pick it up
+    window.speechSynthesis?.cancel();
+    setAiSpeaking(false);
+
+    const rec = new SR();
+    rec.lang = "en-US";
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.maxAlternatives = 1;
+
+    let finalText = "";
+    rec.onresult = (e: any) => {
+      let interimText = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) finalText += r[0].transcript;
+        else interimText += r[0].transcript;
+      }
+      setInterim(interimText);
+    };
+    rec.onerror = (e: any) => {
+      setListening(false);
+      setInterim("");
+      if (e.error !== "no-speech" && e.error !== "aborted") {
+        toast({
+          title: "Mic error",
+          description: e.error || "Could not capture audio",
+          variant: "destructive",
+        });
+      }
+    };
+    rec.onend = () => {
+      setListening(false);
+      setInterim("");
+      const said = finalText.trim();
+      if (said) sendMessage(said);
+    };
+
+    recognitionRef.current = rec;
+    setListening(true);
+    try {
+      rec.start();
+    } catch {
+      setListening(false);
+    }
+  }
+
+  function stopListening() {
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* noop */
+    }
+  }
+
+  // Cleanup speech on unmount / call end
+  useEffect(() => {
+    return () => {
+      window.speechSynthesis?.cancel();
+      try {
+        recognitionRef.current?.abort();
+      } catch {
+        /* noop */
+      }
+    };
+  }, []);
 
   async function endCall(finalTranscript?: Msg[]) {
     if (!active) return;
@@ -230,6 +382,35 @@ export default function TrainingHub() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Call mode</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={mode === "voice" ? "default" : "outline"}
+                      onClick={() => setMode("voice")}
+                      disabled={!voiceSupported}
+                      className="justify-start"
+                    >
+                      <Mic className="w-4 h-4 mr-2" />
+                      Voice
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mode === "text" ? "default" : "outline"}
+                      onClick={() => setMode("text")}
+                      className="justify-start"
+                    >
+                      <Keyboard className="w-4 h-4 mr-2" />
+                      Text
+                    </Button>
+                  </div>
+                  {!voiceSupported && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Voice mode needs Chrome or Edge. Text mode works everywhere.
+                    </p>
+                  )}
+                </div>
                 <Button className="w-full" size="lg" onClick={startCall}>
                   <Phone className="w-4 h-4 mr-2" /> Start Call
                 </Button>
@@ -262,14 +443,21 @@ export default function TrainingHub() {
             <>
               <div className="px-4 py-3 border-b border-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-sm font-medium">Live with AI prospect</span>
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span className="text-sm font-medium">
+                    {mode === "voice" ? "Live voice call" : "Live with AI prospect"}
+                  </span>
                   <Badge variant="outline" className="text-xs">
                     {SCENARIOS.find((s) => s.value === scenario)?.label}
                   </Badge>
                   <Badge variant="outline" className="text-xs capitalize">
                     {difficulty}
                   </Badge>
+                  {aiSpeaking && (
+                    <Badge variant="outline" className="text-xs">
+                      <Volume2 className="w-3 h-3 mr-1" /> Speaking
+                    </Badge>
+                  )}
                 </div>
                 <Button
                   size="sm"
@@ -285,7 +473,9 @@ export default function TrainingHub() {
               <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
                 {transcript.length === 0 && (
                   <div className="text-center text-sm text-muted-foreground py-8">
-                    Type your opening line below — you're calling the prospect.
+                    {mode === "voice"
+                      ? "Tap the mic and say your opening line — the prospect will reply out loud."
+                      : "Type your opening line below — you're calling the prospect."}
                   </div>
                 )}
                 {transcript.map((m, i) => (
@@ -307,6 +497,14 @@ export default function TrainingHub() {
                     </div>
                   </div>
                 ))}
+                {listening && interim && (
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] px-3 py-2 rounded-2xl rounded-br-sm text-sm bg-primary/30 text-foreground italic">
+                      <div className="text-[10px] opacity-70 mb-0.5">You (listening…)</div>
+                      {interim}
+                    </div>
+                  </div>
+                )}
                 {sending && (
                   <div className="flex justify-start">
                     <div className="bg-muted px-3 py-2 rounded-2xl rounded-bl-sm">
@@ -320,23 +518,47 @@ export default function TrainingHub() {
                 )}
               </div>
 
-              <div className="border-t border-border p-3 flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Type what you'd say on the phone..."
-                  disabled={sending}
-                />
-                <Button onClick={sendMessage} disabled={!input.trim() || sending}>
-                  <Send className="w-4 h-4" />
-                </Button>
-              </div>
+              {mode === "voice" ? (
+                <div className="border-t border-border p-4 flex flex-col items-center gap-2">
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant={listening ? "destructive" : "default"}
+                    onClick={listening ? stopListening : startListening}
+                    disabled={sending || aiSpeaking}
+                    className="rounded-full w-16 h-16 p-0"
+                  >
+                    {listening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {aiSpeaking
+                      ? "Prospect is talking…"
+                      : listening
+                      ? "Listening — tap again when done"
+                      : sending
+                      ? "Thinking…"
+                      : "Tap to speak"}
+                  </span>
+                </div>
+              ) : (
+                <div className="border-t border-border p-3 flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="Type what you'd say on the phone..."
+                    disabled={sending}
+                  />
+                  <Button onClick={() => sendMessage()} disabled={!input.trim() || sending}>
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </Card>
