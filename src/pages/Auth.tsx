@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import summitLogo from "@/assets/summit-logo.webp";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,18 +29,8 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: window.location.origin },
-        });
-        if (error) throw error;
-        toast({ title: "Check your email", description: "We sent you a confirmation link." });
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -72,10 +61,10 @@ export default function Auth() {
           />
           <div>
             <h1 className="font-display text-xl font-bold text-foreground tracking-tight">
-              {isLogin ? "Welcome back" : "Create your account"}
+              Welcome back
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {isLogin ? "Sign in to Summit Leads" : "Get started with Summit Leads"}
+              Sign in to Summit Leads
             </p>
           </div>
         </CardHeader>
@@ -101,23 +90,17 @@ export default function Auth() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                autoComplete={isLogin ? "current-password" : "new-password"}
+                autoComplete="current-password"
                 required
                 minLength={6}
               />
             </div>
             <Button type="submit" className="w-full h-10" disabled={loading}>
-              {loading ? "Please wait…" : isLogin ? "Sign in" : "Create account"}
+              {loading ? "Please wait…" : "Sign in"}
             </Button>
           </form>
           <p className="text-center text-xs text-muted-foreground mt-6">
-            {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline font-semibold"
-            >
-              {isLogin ? "Sign up" : "Sign in"}
-            </button>
+            Need an account? Contact your administrator.
           </p>
         </CardContent>
       </Card>
