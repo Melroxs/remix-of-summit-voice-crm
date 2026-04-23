@@ -89,7 +89,7 @@ const App = () => (
                   </AuthGuard>
                 }
               >
-                <Route path="/" element={<ErrorBoundary><RoleRedirect /></ErrorBoundary>} />
+                <Route path="/" element={<RoleRedirect />} />
 
                 <Route path="/contacts" element={
                   <RoleGuard allowedRoles={["admin", "agent"]}><Contacts /></RoleGuard>
