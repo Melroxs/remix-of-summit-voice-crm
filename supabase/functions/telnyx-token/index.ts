@@ -54,8 +54,8 @@ serve(async (req) => {
       );
     }
 
-    const login = Deno.env.get("VITE_TELNYX_LOGIN");
-    const password = Deno.env.get("VITE_TELNYX_PASSWORD");
+    const login = Deno.env.get("TELNYX_SIP_USERNAME") ?? Deno.env.get("VITE_TELNYX_LOGIN");
+    const password = Deno.env.get("TELNYX_SIP_PASSWORD") ?? Deno.env.get("VITE_TELNYX_PASSWORD");
 
     if (!login || !password) {
       return new Response(
