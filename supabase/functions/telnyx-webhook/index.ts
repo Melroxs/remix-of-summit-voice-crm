@@ -3,8 +3,48 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version, telnyx-signature-ed25519, telnyx-timestamp",
 };
+
+// Decode a base64 string to Uint8Array
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function verifyTelnyxSignature(
+  rawBody: string,
+  signatureB64: string | null,
+  timestamp: string | null,
+  publicKeyB64: string,
+): Promise<boolean> {
+  if (!signatureB64 || !timestamp) return false;
+  // Reject stale timestamps (>5 min skew) to prevent replay
+  const tsNum = Number(timestamp);
+  if (!Number.isFinite(tsNum)) return false;
+  const ageSec = Math.abs(Math.floor(Date.now() / 1000) - tsNum);
+  if (ageSec > 300) return false;
+
+  try {
+    const publicKeyBytes = b64ToBytes(publicKeyB64);
+    const signatureBytes = b64ToBytes(signatureB64);
+    const message = new TextEncoder().encode(`${timestamp}|${rawBody}`);
+
+    const key = await crypto.subtle.importKey(
+      "raw",
+      publicKeyBytes,
+      { name: "Ed25519" },
+      false,
+      ["verify"],
+    );
+    return await crypto.subtle.verify("Ed25519", key, signatureBytes, message);
+  } catch (e) {
+    console.error("[telnyx-webhook] Signature verification error:", e);
+    return false;
+  }
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -12,14 +52,41 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
+    // Read raw body once for both signature verification and JSON parsing
+    const rawBody = await req.text();
+
+    const publicKey = Deno.env.get("TELNYX_WEBHOOK_PUBLIC_KEY");
+    if (!publicKey) {
+      console.error("[telnyx-webhook] TELNYX_WEBHOOK_PUBLIC_KEY not configured — rejecting request");
+      return new Response(JSON.stringify({ error: "Webhook verification not configured" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const signature = req.headers.get("telnyx-signature-ed25519");
+    const timestamp = req.headers.get("telnyx-timestamp");
+    const isValid = await verifyTelnyxSignature(rawBody, signature, timestamp, publicKey);
+    if (!isValid) {
+      console.warn("[telnyx-webhook] Invalid or missing signature — rejecting");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const eventType = body?.data?.event_type || body?.event_type;
 
     console.log("[telnyx-webhook] Event:", eventType, JSON.stringify(body).slice(0, 500));
-
-    // Verify webhook signature if secret is set
-    const webhookSecret = Deno.env.get("TELNYX_WEBHOOK_SECRET");
-    // Note: Full signature verification requires ed25519 - for now we log and process
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
