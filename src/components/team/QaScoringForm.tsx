@@ -42,7 +42,7 @@ export default function QaScoringForm({ callLogId, agentId, campaignId, onClose,
     if (!user) return;
     setSaving(true);
     const { error } = await supabase.from("qa_reviews").insert({
-      call_log_id: callLogId,
+      call_attempt_id: callLogId,
       agent_id: agentId,
       scored_by: user.id,
       campaign_id: campaignId || null,

@@ -60,9 +60,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { call_log_id, regenerate } = await req.json();
-    if (!call_log_id) {
-      return new Response(JSON.stringify({ error: "call_log_id is required" }), {
+    const { call_attempt_id, regenerate } = await req.json();
+    if (!call_attempt_id) {
+      return new Response(JSON.stringify({ error: "call_attempt_id is required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -71,14 +71,14 @@ Deno.serve(async (req) => {
 
     // If regenerating, delete existing summary
     if (regenerate) {
-      await adminClient.from("ai_summaries").delete().eq("call_log_id", call_log_id);
+      await adminClient.from("ai_summaries").delete().eq("call_attempt_id", call_attempt_id);
     }
 
     // Check if summary already exists
     const { data: existing } = await adminClient
       .from("ai_summaries")
       .select("id")
-      .eq("call_log_id", call_log_id)
+      .eq("call_attempt_id", call_attempt_id)
       .maybeSingle();
 
     if (existing && !regenerate) {
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
     const { data: callLog } = await adminClient
       .from("call_attempts")
       .select("*, contacts(first_name, last_name, owner_renter, credit_rating, home_value, household_income, cool_notes, city, state), campaigns(name)")
-      .eq("id", call_log_id)
+      .eq("id", call_attempt_id)
       .maybeSingle();
 
     if (!callLog) {
@@ -102,7 +102,7 @@ Deno.serve(async (req) => {
 
     // Insert pending record
     const pendingRow = {
-      call_log_id,
+      call_attempt_id,
       contact_id: callLog.contact_id || null,
       agent_id: callLog.agent_id || null,
       campaign_id: callLog.campaign_id || null,

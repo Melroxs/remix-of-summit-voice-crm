@@ -170,7 +170,7 @@ export async function processImport(
         }
       }
 
-      toInsert.push({ ...contact, import_job_id: jobId });
+      toInsert.push({ ...contact, lead_import_id: jobId });
     }
 
     // Batch insert
@@ -215,7 +215,7 @@ export async function processImport(
   // Store errors
   if (result.errors.length > 0) {
     const errorRows = result.errors.slice(0, 500).map((e) => ({
-      import_job_id: jobId,
+      lead_import_id: jobId,
       row_number: e.row,
       error_message: e.message,
       raw_payload: buildErrorMetadata(e.data),

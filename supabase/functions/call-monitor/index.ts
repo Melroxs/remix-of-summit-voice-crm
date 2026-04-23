@@ -47,14 +47,14 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, call_log_id, mode, session_id } = body;
+    const { action, call_attempt_id, mode, session_id } = body;
 
     if (!action) return jsonResponse({ error: "action is required" }, 400);
 
     // ─── START MONITORING ─────────────────────────────────
     if (action === "start") {
-      if (!call_log_id || !mode) {
-        return jsonResponse({ error: "call_log_id and mode are required" }, 400);
+      if (!call_attempt_id || !mode) {
+        return jsonResponse({ error: "call_attempt_id and mode are required" }, 400);
       }
       if (!["listen", "whisper", "barge"].includes(mode)) {
         return jsonResponse({ error: "mode must be listen, whisper, or barge" }, 400);
@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
       const { data: callLog, error: clErr } = await supabaseAdmin
         .from("call_attempts")
         .select("id, agent_id, contact_id, campaign_id, telnyx_call_id, provider_used, outbound_number_used, ended_at")
-        .eq("id", call_log_id)
+        .eq("id", call_attempt_id)
         .single();
 
       if (clErr || !callLog) return jsonResponse({ error: "Call not found" }, 404);
@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
       const { data: existing } = await supabaseAdmin
         .from("call_monitoring_sessions")
         .select("id")
-        .eq("call_log_id", call_log_id)
+        .eq("call_attempt_id", call_attempt_id)
         .eq("supervisor_id", caller.id)
         .eq("status", "active")
         .maybeSingle();
@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
 
       // Create monitoring session record
       const sessionData: Record<string, unknown> = {
-        call_log_id,
+        call_attempt_id,
         supervisor_id: caller.id,
         agent_id: callLog.agent_id,
         campaign_id: callLog.campaign_id,
@@ -129,7 +129,7 @@ Deno.serve(async (req) => {
         admin_id: caller.id,
         action: `monitor_${mode}_start`,
         target_user_id: callLog.agent_id,
-        details: { call_log_id, provider_type, session_id: session.id, success: providerResult.success },
+        details: { call_attempt_id, provider_type, session_id: session.id, success: providerResult.success },
       });
 
       if (!providerResult.success) {

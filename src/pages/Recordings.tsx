@@ -12,7 +12,7 @@ interface RecordingRow {
   duration_seconds: number | null;
   format: string | null;
   created_at: string;
-  call_log_id: string | null;
+  call_attempt_id: string | null;
   contact_name: string;
   disposition: string | null;
   campaign_name: string | null;
@@ -35,7 +35,7 @@ export default function Recordings() {
       setLoading(true);
       let query = supabase
         .from("call_recordings")
-        .select("id, duration_seconds, format, created_at, call_log_id, telnyx_recording_id, call_logs(disposition, campaign_id, contacts(first_name, last_name), campaigns(name))")
+        .select("id, duration_seconds, format, created_at, call_attempt_id, telnyx_recording_id, call_attempts(disposition, campaign_id, contacts(first_name, last_name), campaigns(name))")
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -46,7 +46,7 @@ export default function Recordings() {
         duration_seconds: r.duration_seconds,
         format: r.format,
         created_at: r.created_at,
-        call_log_id: r.call_log_id,
+        call_attempt_id: r.call_attempt_id,
         contact_name: r.call_logs?.contacts
           ? `${r.call_logs.contacts.first_name} ${r.call_logs.contacts.last_name}`
           : "Unknown",
@@ -69,7 +69,7 @@ export default function Recordings() {
   const getSecureUrl = async (recordingId: string): Promise<string | null> => {
     try {
       const { data, error } = await supabase.functions.invoke("get-recording-url", {
-        body: { recording_id: recordingId },
+        body: { call_recording_id: recordingId },
       });
       if (error || !data?.url) return null;
       return data.url;

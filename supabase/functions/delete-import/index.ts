@@ -47,9 +47,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { import_job_id } = await req.json();
-    if (!import_job_id) {
-      return new Response(JSON.stringify({ error: "import_job_id required" }), {
+    const { lead_import_id } = await req.json();
+    if (!lead_import_id) {
+      return new Response(JSON.stringify({ error: "lead_import_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     const { data: job, error: jobErr } = await adminClient
       .from("lead_imports")
       .select("id, filename, total_rows, successful_rows")
-      .eq("id", import_job_id)
+      .eq("id", lead_import_id)
       .maybeSingle();
 
     if (jobErr || !job) {
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const { data: contacts } = await adminClient
       .from("contacts")
       .select("id")
-      .eq("import_job_id", import_job_id);
+      .eq("lead_import_id", lead_import_id);
 
     const contactIds = (contacts || []).map((c: any) => c.id);
     let deletedContacts = 0;
@@ -103,17 +103,17 @@ Deno.serve(async (req) => {
     }
 
     // Delete import errors
-    await adminClient.from("lead_import_rows").delete().eq("import_job_id", import_job_id);
+    await adminClient.from("lead_import_rows").delete().eq("lead_import_id", lead_import_id);
 
     // Delete the import job itself
-    await adminClient.from("lead_imports").delete().eq("id", import_job_id);
+    await adminClient.from("lead_imports").delete().eq("id", lead_import_id);
 
     // Audit log
     await adminClient.from("admin_audit_log").insert({
       admin_id: user.id,
       action: "delete_import_list",
       details: {
-        import_job_id,
+        lead_import_id,
         filename: job.filename,
         contacts_deleted: deletedContacts,
       },

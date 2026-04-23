@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
         .from("call_recordings")
         .insert({
           telnyx_recording_id: recordingId,
-          call_log_id: callLogId,
+          call_attempt_id: callLogId,
           recording_url: downloadUrl || null,
           duration_seconds: duration ? Math.round(duration) : null,
           format,
@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       if (callLogId && recording) {
         await supabase
           .from("call_attempts")
-          .update({ recording_id: recording.id } as any)
+          .update({ call_recording_id: recording.id } as any)
           .eq("id", callLogId);
       }
 

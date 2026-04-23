@@ -229,7 +229,7 @@ export default function Dialer() {
 
   const triggerAiSummary = useCallback((callLogId: string | null) => {
     if (!callLogId) return;
-    supabase.functions.invoke("ai-call-summary", { body: { call_log_id: callLogId } }).catch(() => {});
+    supabase.functions.invoke("ai-call-summary", { body: { call_attempt_id: callLogId } }).catch(() => {});
   }, []);
 
   /**
