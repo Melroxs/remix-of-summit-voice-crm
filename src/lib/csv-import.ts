@@ -5,7 +5,9 @@ import { supabase } from "@/integrations/supabase/client";
 export const CONTACT_FIELDS = [
   { key: "first_name", label: "First Name", required: true },
   { key: "last_name", label: "Last Name", required: true },
+  { key: "full_name", label: "Full Name (auto-split)", required: false },
   { key: "phone_raw", label: "Phone", required: false },
+  { key: "email", label: "Email", required: false },
   { key: "address", label: "Address", required: false },
   { key: "city", label: "City", required: false },
   { key: "state", label: "State", required: false },
@@ -18,6 +20,8 @@ export const CONTACT_FIELDS = [
   { key: "credit_rating", label: "Credit Rating", required: false },
   { key: "cool_notes", label: "Notes", required: false },
   { key: "timezone", label: "Timezone", required: false },
+  { key: "lead_source", label: "Lead Source", required: false },
+  { key: "tags", label: "Tags (comma-separated)", required: false },
 ] as const;
 
 export type ColumnMapping = Record<string, string>; // csv_header -> contact_field_key
@@ -43,7 +47,9 @@ export function autoMapColumns(csvHeaders: string[]): ColumnMapping {
   const aliases: Record<string, string[]> = {
     first_name: ["first_name", "firstname", "first name", "fname", "first"],
     last_name: ["last_name", "lastname", "last name", "lname", "last"],
+    full_name: ["name", "full_name", "fullname", "full name", "contact_name", "contact name"],
     phone_raw: ["phone", "phone_raw", "phone_number", "phonenumber", "cell", "mobile", "telephone"],
+    email: ["email", "email_address", "e-mail", "emailaddress"],
     address: ["address", "street", "street_address", "address1"],
     city: ["city"],
     state: ["state", "st"],
@@ -56,6 +62,8 @@ export function autoMapColumns(csvHeaders: string[]): ColumnMapping {
     credit_rating: ["credit_rating", "credit", "credit_score"],
     cool_notes: ["notes", "cool_notes", "comments"],
     timezone: ["timezone", "tz", "time_zone"],
+    lead_source: ["source", "lead_source", "leadsource", "channel", "origin"],
+    tags: ["tags", "labels", "categories"],
   };
 
   for (const header of csvHeaders) {
@@ -95,6 +103,85 @@ interface ProcessResult {
   failed: number;
   duplicates: number;
   errors: { row: number; message: string; data: Record<string, string> }[];
+}
+
+/** Pre-process dry-run: count valid / duplicate / invalid rows without inserting. */
+export interface DryRunResult {
+  total: number;
+  valid: number;
+  duplicates: number;
+  invalid: number;
+  invalidReasons: Record<string, number>; // reason -> count
+}
+
+export async function dryRunImport(
+  rows: Record<string, string>[],
+  mapping: ColumnMapping
+): Promise<DryRunResult> {
+  const result: DryRunResult = {
+    total: rows.length, valid: 0, duplicates: 0, invalid: 0, invalidReasons: {},
+  };
+  const phonesInBatch = new Set<string>();
+
+  // Cache existing phones for dedup check
+  const { data: existingContacts } = await supabase
+    .from("contacts").select("phone_e164").not("phone_e164", "is", null);
+  const existingPhones = new Set<string>();
+  for (const c of existingContacts || []) {
+    if (c.phone_e164) existingPhones.add(c.phone_e164);
+  }
+
+  const bump = (reason: string) => {
+    result.invalid++;
+    result.invalidReasons[reason] = (result.invalidReasons[reason] || 0) + 1;
+  };
+
+  for (const row of rows) {
+    const c = mapRow(row, mapping);
+    if (!c.first_name || !c.last_name) {
+      bump("Missing first or last name");
+      continue;
+    }
+    if (c.phone_raw) {
+      const n = normalizePhoneToE164(c.phone_raw);
+      if (!n.valid) {
+        bump(`Invalid phone (${n.error || "unknown"})`);
+        continue;
+      }
+      if (existingPhones.has(n.e164) || phonesInBatch.has(n.e164)) {
+        result.duplicates++;
+        continue;
+      }
+      phonesInBatch.add(n.e164);
+    }
+    result.valid++;
+  }
+  return result;
+}
+
+/** Map a CSV row through the user mapping, splitting `full_name` and parsing tags. */
+function mapRow(row: Record<string, string>, mapping: ColumnMapping): Record<string, any> {
+  const contact: Record<string, any> = {};
+  for (const [csvHeader, fieldKey] of Object.entries(mapping)) {
+    if (!fieldKey || row[csvHeader] === undefined) continue;
+    const raw = (row[csvHeader] || "").trim();
+    if (!raw) continue;
+
+    if (fieldKey === "full_name") {
+      const parts = raw.split(/\s+/);
+      if (parts.length === 1) {
+        contact.first_name = contact.first_name || parts[0];
+      } else {
+        contact.first_name = contact.first_name || parts[0];
+        contact.last_name = contact.last_name || parts.slice(1).join(" ");
+      }
+    } else if (fieldKey === "tags") {
+      contact.tags = raw.split(/[,;|]/).map((t) => t.trim()).filter(Boolean);
+    } else {
+      contact[fieldKey] = raw;
+    }
+  }
+  return contact;
 }
 
 export async function processImport(
