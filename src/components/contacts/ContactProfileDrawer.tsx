@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Pencil, Trash2 } from "lucide-react";
+import { Lock } from "lucide-react";
 import { formatPhoneDisplay } from "@/lib/phone";
 import EditContactModal from "./EditContactModal";
 import DeleteConfirmDialog from "./DeleteConfirmDialog";
@@ -20,12 +21,20 @@ interface Props {
 
 export default function ContactProfileDrawer({ contactId, onClose, onDeleted, onUpdated }: Props) {
   const [contact, setContact] = useState<any>(null);
+  const [ownerName, setOwnerName] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
 
   const fetchContact = async () => {
     const { data } = await supabase.from("contacts").select("*").eq("id", contactId).single();
     setContact(data);
+    if (data?.locked_to_agent_id) {
+      const { data: profile } = await supabase
+        .from("profiles").select("display_name").eq("user_id", data.locked_to_agent_id).maybeSingle();
+      setOwnerName(profile?.display_name || "Agent");
+    } else {
+      setOwnerName(null);
+    }
   };
 
   useEffect(() => {
@@ -65,6 +74,12 @@ export default function ContactProfileDrawer({ contactId, onClose, onDeleted, on
           </SheetHeader>
 
           <div className="space-y-6 mt-4">
+            {ownerName && (
+              <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/20 rounded-md">
+                <Lock className="w-4 h-4 text-primary" />
+                <span className="text-sm">Owned by <strong>{ownerName}</strong> after live connect</span>
+              </div>
+            )}
             {/* Contact Details */}
             <div className="grid grid-cols-2 gap-3 text-sm">
               {contact.title && <div><span className="text-muted-foreground">Title:</span> {contact.title}</div>}

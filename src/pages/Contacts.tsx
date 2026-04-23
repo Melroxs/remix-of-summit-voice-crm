@@ -11,12 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Users, ChevronLeft, ChevronRight, Megaphone, Trash2 } from "lucide-react";
+import { Search, Plus, Users, ChevronLeft, ChevronRight, Megaphone, Trash2, Lock, Filter } from "lucide-react";
 import { formatPhoneDisplay } from "@/lib/phone";
 import ContactModal from "@/components/contacts/ContactModal";
 import ContactProfileDrawer from "@/components/contacts/ContactProfileDrawer";
 import DeleteConfirmDialog from "@/components/contacts/DeleteConfirmDialog";
 import { toast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
 
 const PAGE_SIZE = 50;
 
@@ -30,6 +31,15 @@ export default function Contacts() {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [ownershipFilter, setOwnershipFilter] = useState<string>("all"); // all | locked | unlocked
+  const [agents, setAgents] = useState<Record<string, string>>({}); // user_id -> display_name
+
+  // Per-contact ops data (attempts, last_call, next_callback) keyed by contact_id
+  const [opsData, setOpsData] = useState<Record<string, { attempts: number; last_called_at: string | null; next_callback_at: string | null }>>({});
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -49,19 +59,83 @@ export default function Contacts() {
     let query = supabase.from("contacts").select("*").order("created_at", { ascending: false }).range(from, to);
 
     if (search) {
-      const filter = `first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_e164.ilike.%${search}%`;
+      const filter = `first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_e164.ilike.%${search}%,email.ilike.%${search}%`;
       query = query.or(filter);
       countQuery = countQuery.or(filter);
+    }
+    if (statusFilter !== "all") {
+      query = query.eq("lead_status", statusFilter as any);
+      countQuery = countQuery.eq("lead_status", statusFilter as any);
+    }
+    if (ownershipFilter === "locked") {
+      query = query.not("locked_to_agent_id", "is", null);
+      countQuery = countQuery.not("locked_to_agent_id", "is", null);
+    } else if (ownershipFilter === "unlocked") {
+      query = query.is("locked_to_agent_id", null);
+      countQuery = countQuery.is("locked_to_agent_id", null);
+    }
+    if (campaignFilter !== "all") {
+      const { data: links } = await supabase
+        .from("campaign_contacts")
+        .select("contact_id")
+        .eq("campaign_id", campaignFilter)
+        .limit(5000);
+      const ids = (links || []).map((l) => l.contact_id);
+      if (ids.length === 0) {
+        setContacts([]); setTotalCount(0); setLoading(false); return;
+      }
+      query = query.in("id", ids);
+      countQuery = countQuery.in("id", ids);
     }
 
     const [{ data }, { count }] = await Promise.all([query, countQuery]);
     setContacts(data || []);
     setTotalCount(count ?? 0);
+
+    // Fetch ops data for visible page
+    const visibleIds = (data || []).map((c) => c.id);
+    if (visibleIds.length > 0) {
+      const [ccRes, cbRes, agRes] = await Promise.all([
+        supabase.from("campaign_contacts")
+          .select("contact_id, attempts, last_called_at")
+          .in("contact_id", visibleIds),
+        supabase.from("callbacks")
+          .select("contact_id, callback_at")
+          .in("contact_id", visibleIds)
+          .eq("status", "pending")
+          .order("callback_at", { ascending: true }),
+        supabase.from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", (data || []).map((c) => c.locked_to_agent_id).filter(Boolean) as string[]),
+      ]);
+
+      const ops: Record<string, { attempts: number; last_called_at: string | null; next_callback_at: string | null }> = {};
+      for (const row of ccRes.data || []) {
+        const existing = ops[row.contact_id];
+        ops[row.contact_id] = {
+          attempts: Math.max(existing?.attempts ?? 0, row.attempts ?? 0),
+          last_called_at: !existing?.last_called_at || (row.last_called_at && row.last_called_at > existing.last_called_at)
+            ? row.last_called_at : existing.last_called_at,
+          next_callback_at: existing?.next_callback_at ?? null,
+        };
+      }
+      for (const cb of cbRes.data || []) {
+        if (!ops[cb.contact_id]) ops[cb.contact_id] = { attempts: 0, last_called_at: null, next_callback_at: cb.callback_at };
+        else if (!ops[cb.contact_id].next_callback_at) ops[cb.contact_id].next_callback_at = cb.callback_at;
+      }
+      setOpsData(ops);
+
+      const agentMap: Record<string, string> = {};
+      for (const a of agRes.data || []) agentMap[a.user_id] = a.display_name || "Agent";
+      setAgents((prev) => ({ ...prev, ...agentMap }));
+    } else {
+      setOpsData({});
+    }
     setLoading(false);
-  }, [search, page]);
+  }, [search, page, statusFilter, campaignFilter, ownershipFilter]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
-  useEffect(() => { setPage(0); }, [search]);
+  useEffect(() => { setPage(0); }, [search, statusFilter, campaignFilter, ownershipFilter]);
 
   useEffect(() => {
     supabase.from("campaigns").select("id, name").order("name").then(({ data }) => setCampaigns(data || []));
@@ -182,9 +256,37 @@ export default function Contacts() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Search contacts..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input placeholder="Search name, phone, email..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="new">New</SelectItem>
+                <SelectItem value="contacted">Contacted</SelectItem>
+                <SelectItem value="qualified">Qualified</SelectItem>
+                <SelectItem value="converted">Converted</SelectItem>
+                <SelectItem value="dead">Dead</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+              <SelectTrigger className="w-[180px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All campaigns</SelectItem>
+                {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={ownershipFilter} onValueChange={setOwnershipFilter}>
+              <SelectTrigger className="w-[140px]"><Filter className="w-3 h-3 mr-1" /><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All ownership</SelectItem>
+                <SelectItem value="locked">Owned (locked)</SelectItem>
+                <SelectItem value="unlocked">Available</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -194,21 +296,26 @@ export default function Contacts() {
                 {!isClient && <TableHead className="w-10"><Checkbox checked={contacts.length > 0 && selected.size === contacts.length} onCheckedChange={toggleSelectAll} /></TableHead>}
                 <TableHead>Name</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>Location</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Owner/Renter</TableHead>
+                <TableHead className="text-right">Attempts</TableHead>
+                <TableHead>Last Call</TableHead>
+                <TableHead>Next Callback</TableHead>
+                <TableHead>Owner</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading...</TableCell></TableRow>
               ) : contacts.length === 0 ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-8">
+                <TableRow><TableCell colSpan={8} className="text-center py-8">
                   <Users className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
                   <p className="text-muted-foreground">No contacts found.</p>
                 </TableCell></TableRow>
               ) : (
-                contacts.map((c) => (
+                contacts.map((c) => {
+                  const ops = opsData[c.id];
+                  const ownerName = c.locked_to_agent_id ? (agents[c.locked_to_agent_id] || "Locked") : null;
+                  return (
                   <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedContactId(c.id)}>
                     {!isClient && (
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -218,13 +325,32 @@ export default function Contacts() {
                     <TableCell className="font-medium">
                       {c.first_name} {c.last_name}
                       {c.title && <span className="text-muted-foreground text-xs ml-2">{c.title}</span>}
+                      {c.tags && c.tags.length > 0 && (
+                        <div className="flex gap-1 mt-1 flex-wrap">
+                          {c.tags.slice(0, 3).map((t: string) => (
+                            <Badge key={t} variant="outline" className="text-[10px] py-0 px-1 h-4">{t}</Badge>
+                          ))}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">{formatPhoneDisplay(c.phone_e164 || c.phone_raw || "")}</TableCell>
-                    <TableCell className="text-sm">{[c.city, c.state].filter(Boolean).join(", ")}</TableCell>
                     <TableCell><Badge variant="secondary" className={statusColor(c.lead_status)}>{c.lead_status}</Badge></TableCell>
-                    <TableCell className="text-sm">{c.owner_renter || "—"}</TableCell>
+                    <TableCell className="text-right text-sm font-mono">{ops?.attempts ?? 0}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {ops?.last_called_at ? formatDistanceToNow(new Date(ops.last_called_at), { addSuffix: true }) : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {ops?.next_callback_at ? new Date(ops.next_callback_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {ownerName ? (
+                        <Badge variant="secondary" className="bg-primary/10 text-primary text-xs">
+                          <Lock className="w-3 h-3 mr-1" />{ownerName}
+                        </Badge>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                   </TableRow>
-                ))
+                );})
               )}
             </TableBody>
           </Table>

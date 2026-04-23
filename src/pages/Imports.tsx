@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, FileSpreadsheet, CheckCircle, AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { parseCSV, autoMapColumns, processImport, ColumnMapping } from "@/lib/csv-import";
+import { parseCSV, autoMapColumns, processImport, dryRunImport, ColumnMapping, DryRunResult } from "@/lib/csv-import";
 import ColumnMapper from "@/components/imports/ColumnMapper";
 import { useAuth } from "@/hooks/use-auth";
 import ImportDeleteDialog from "@/components/imports/ImportDeleteDialog";
@@ -27,6 +27,8 @@ export default function Imports() {
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [progress, setProgress] = useState({ processed: 0, total: 0 });
   const [result, setResult] = useState<{ successful: number; failed: number; duplicates: number } | null>(null);
+  const [dryRun, setDryRun] = useState<DryRunResult | null>(null);
+  const [dryRunning, setDryRunning] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [deleteJob, setDeleteJob] = useState<any | null>(null);
 
@@ -68,6 +70,17 @@ export default function Imports() {
       toast({ title: "Parse error", description: "Failed to parse CSV file.", variant: "destructive" });
     }
   };
+
+  // Recompute dry-run whenever mapping changes during the mapping step
+  useEffect(() => {
+    if (step !== "mapping" || csvRows.length === 0) return;
+    let cancelled = false;
+    setDryRunning(true);
+    dryRunImport(csvRows, mapping)
+      .then((r) => { if (!cancelled) setDryRun(r); })
+      .finally(() => { if (!cancelled) setDryRunning(false); });
+    return () => { cancelled = true; };
+  }, [step, csvRows, mapping]);
 
   const handleStartImport = async () => {
     setStep("processing");
@@ -120,6 +133,7 @@ export default function Imports() {
     setMapping({});
     setFileName("");
     setResult(null);
+    setDryRun(null);
     setProgress({ processed: 0, total: 0 });
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -193,6 +207,42 @@ export default function Imports() {
           <p className="text-sm text-muted-foreground">
             <strong>{fileName}</strong> — {csvRows.length.toLocaleString()} rows detected
           </p>
+          <Card>
+            <CardContent className="py-4">
+              <p className="text-xs text-muted-foreground mb-3 uppercase tracking-wide">
+                Pre-import preview {dryRunning && "(updating…)"}
+              </p>
+              <div className="grid grid-cols-4 gap-3 text-center text-sm">
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{csvRows.length.toLocaleString()}</p>
+                  <p className="text-muted-foreground">Total</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-success">{dryRun?.valid.toLocaleString() ?? "—"}</p>
+                  <p className="text-muted-foreground">Valid</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-warning">{dryRun?.duplicates.toLocaleString() ?? "—"}</p>
+                  <p className="text-muted-foreground">Duplicates</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-destructive">{dryRun?.invalid.toLocaleString() ?? "—"}</p>
+                  <p className="text-muted-foreground">Invalid</p>
+                </div>
+              </div>
+              {dryRun && Object.keys(dryRun.invalidReasons).length > 0 && (
+                <div className="mt-4 pt-3 border-t border-border space-y-1">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Invalid breakdown</p>
+                  {Object.entries(dryRun.invalidReasons).map(([reason, count]) => (
+                    <div key={reason} className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">{reason}</span>
+                      <span className="font-mono text-foreground">{count.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
           <ColumnMapper
             csvHeaders={csvHeaders}
             mapping={mapping}

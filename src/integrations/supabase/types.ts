@@ -1097,12 +1097,14 @@ export type Database = {
           county: string | null
           created_at: string
           credit_rating: string | null
+          email: string | null
           first_name: string
           home_value: string | null
           household_income: string | null
           id: string
           last_name: string
           lead_import_id: string | null
+          lead_source: string | null
           lead_status: Database["public"]["Enums"]["lead_status"] | null
           locked_at: string | null
           locked_to_agent_id: string | null
@@ -1110,6 +1112,7 @@ export type Database = {
           phone_e164: string | null
           phone_raw: string | null
           state: string | null
+          tags: string[]
           timezone: string | null
           title: string | null
           updated_at: string
@@ -1123,12 +1126,14 @@ export type Database = {
           county?: string | null
           created_at?: string
           credit_rating?: string | null
+          email?: string | null
           first_name: string
           home_value?: string | null
           household_income?: string | null
           id?: string
           last_name: string
           lead_import_id?: string | null
+          lead_source?: string | null
           lead_status?: Database["public"]["Enums"]["lead_status"] | null
           locked_at?: string | null
           locked_to_agent_id?: string | null
@@ -1136,6 +1141,7 @@ export type Database = {
           phone_e164?: string | null
           phone_raw?: string | null
           state?: string | null
+          tags?: string[]
           timezone?: string | null
           title?: string | null
           updated_at?: string
@@ -1149,12 +1155,14 @@ export type Database = {
           county?: string | null
           created_at?: string
           credit_rating?: string | null
+          email?: string | null
           first_name?: string
           home_value?: string | null
           household_income?: string | null
           id?: string
           last_name?: string
           lead_import_id?: string | null
+          lead_source?: string | null
           lead_status?: Database["public"]["Enums"]["lead_status"] | null
           locked_at?: string | null
           locked_to_agent_id?: string | null
@@ -1162,6 +1170,7 @@ export type Database = {
           phone_e164?: string | null
           phone_raw?: string | null
           state?: string | null
+          tags?: string[]
           timezone?: string | null
           title?: string | null
           updated_at?: string
