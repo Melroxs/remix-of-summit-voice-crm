@@ -18,8 +18,10 @@ const TOOL_SCHEMA = {
         call_outcome_summary: { type: "string", description: "One-line outcome, e.g. 'Homeowner interested, callback requested'" },
         next_action: { type: "string", description: "Specific actionable next step for the agent" },
         sentiment: { type: "string", enum: ["positive", "neutral", "negative", "unknown"], description: "Overall call sentiment" },
+        lead_quality_score: { type: "integer", minimum: 1, maximum: 10, description: "Lead quality 1-10. 10=hot homeowner ready to buy, 1=dead lead/wrong number." },
+        recommended_action: { type: "string", description: "Concrete recommended next action (e.g. 'Book on-site inspection within 48h', 'Add to nurture drip', 'Mark DNC')." },
       },
-      required: ["summary", "call_outcome_summary", "next_action", "sentiment"],
+      required: ["summary", "call_outcome_summary", "next_action", "sentiment", "lead_quality_score", "recommended_action"],
       additionalProperties: false,
     },
   },
@@ -152,10 +154,18 @@ Deno.serve(async (req) => {
     ].filter(Boolean).join("\n");
 
     const systemPrompt = `You are a CRM call intelligence assistant for an outbound sales/lead generation call center.
-Based on the call metadata provided, generate a structured summary. 
+You work for a roofing company doing outbound calls to homeowners about roof repair / replacement.
+Based on the call metadata provided, generate a structured summary.
 Even if there is no transcript, use the disposition, notes, duration, and contact context to produce useful CRM intelligence.
 If the call was very short (under 10 seconds) with no_answer/voicemail, keep the summary brief.
-For longer calls with notes, provide detailed actionable intelligence.`;
+For longer calls with notes, provide detailed actionable intelligence.
+
+Lead quality score guide (1-10):
+- 9-10: Confirmed homeowner, urgent roofing need, appointment booked or hot intent
+- 7-8: Homeowner with real interest, callback or warm follow-up
+- 5-6: Reachable, lukewarm interest, needs nurture
+- 3-4: Reached but not interested or wrong timing
+- 1-2: Wrong number, DNC, dead lead, no contact made`;
 
     try {
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -226,6 +236,9 @@ For longer calls with notes, provide detailed actionable intelligence.`;
         sentiment: parsed.sentiment || null,
         call_outcome_summary: parsed.call_outcome_summary || null,
         suggested_next_action: parsed.next_action || null,
+        lead_quality_score: typeof parsed.lead_quality_score === "number" ? Math.max(1, Math.min(10, Math.round(parsed.lead_quality_score))) : null,
+        recommended_action: parsed.recommended_action || parsed.next_action || null,
+        quality_score: typeof parsed.lead_quality_score === "number" ? Math.max(1, Math.min(10, Math.round(parsed.lead_quality_score))) * 10 : null,
         summary_source: "fallback",
         generation_status: "complete",
         error_message: null,

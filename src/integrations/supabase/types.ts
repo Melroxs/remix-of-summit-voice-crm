@@ -52,9 +52,11 @@ export type Database = {
           error_message: string | null
           generation_status: string
           id: string
+          lead_quality_score: number | null
           next_action: string | null
           next_step_recommendation: string | null
           quality_score: number | null
+          recommended_action: string | null
           sentiment: string | null
           suggested_next_action: string | null
           summary: string
@@ -70,9 +72,11 @@ export type Database = {
           error_message?: string | null
           generation_status?: string
           id?: string
+          lead_quality_score?: number | null
           next_action?: string | null
           next_step_recommendation?: string | null
           quality_score?: number | null
+          recommended_action?: string | null
           sentiment?: string | null
           suggested_next_action?: string | null
           summary?: string
@@ -88,9 +92,11 @@ export type Database = {
           error_message?: string | null
           generation_status?: string
           id?: string
+          lead_quality_score?: number | null
           next_action?: string | null
           next_step_recommendation?: string | null
           quality_score?: number | null
+          recommended_action?: string | null
           sentiment?: string | null
           suggested_next_action?: string | null
           summary?: string
@@ -111,6 +117,8 @@ export type Database = {
           address: string | null
           agent_id: string | null
           appointment_at: string
+          appointment_type: Database["public"]["Enums"]["appointment_type"]
+          booked_from_call_id: string | null
           campaign_id: string | null
           city: string | null
           closer_user_id: string | null
@@ -123,6 +131,7 @@ export type Database = {
           notes: string | null
           state: string | null
           status: Database["public"]["Enums"]["appointment_status"] | null
+          timezone: string | null
           urgency: Database["public"]["Enums"]["urgency_level"]
           zip_code: string | null
         }
@@ -130,6 +139,8 @@ export type Database = {
           address?: string | null
           agent_id?: string | null
           appointment_at: string
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          booked_from_call_id?: string | null
           campaign_id?: string | null
           city?: string | null
           closer_user_id?: string | null
@@ -142,6 +153,7 @@ export type Database = {
           notes?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["appointment_status"] | null
+          timezone?: string | null
           urgency?: Database["public"]["Enums"]["urgency_level"]
           zip_code?: string | null
         }
@@ -149,6 +161,8 @@ export type Database = {
           address?: string | null
           agent_id?: string | null
           appointment_at?: string
+          appointment_type?: Database["public"]["Enums"]["appointment_type"]
+          booked_from_call_id?: string | null
           campaign_id?: string | null
           city?: string | null
           closer_user_id?: string | null
@@ -161,6 +175,7 @@ export type Database = {
           notes?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["appointment_status"] | null
+          timezone?: string | null
           urgency?: Database["public"]["Enums"]["urgency_level"]
           zip_code?: string | null
         }
@@ -1398,6 +1413,57 @@ export type Database = {
           },
         ]
       }
+      follow_up_tasks: {
+        Row: {
+          agent_id: string | null
+          appointment_id: string | null
+          assigned_to: string | null
+          campaign_id: string | null
+          company_id: string | null
+          completed_at: string | null
+          contact_id: string
+          created_at: string
+          description: string | null
+          due_at: string
+          id: string
+          status: Database["public"]["Enums"]["follow_up_task_status"]
+          task_type: Database["public"]["Enums"]["follow_up_task_type"]
+          title: string
+        }
+        Insert: {
+          agent_id?: string | null
+          appointment_id?: string | null
+          assigned_to?: string | null
+          campaign_id?: string | null
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id: string
+          created_at?: string
+          description?: string | null
+          due_at: string
+          id?: string
+          status?: Database["public"]["Enums"]["follow_up_task_status"]
+          task_type?: Database["public"]["Enums"]["follow_up_task_type"]
+          title: string
+        }
+        Update: {
+          agent_id?: string | null
+          appointment_id?: string | null
+          assigned_to?: string | null
+          campaign_id?: string | null
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string
+          created_at?: string
+          description?: string | null
+          due_at?: string
+          id?: string
+          status?: Database["public"]["Enums"]["follow_up_task_status"]
+          task_type?: Database["public"]["Enums"]["follow_up_task_type"]
+          title?: string
+        }
+        Relationships: []
+      }
       lead_import_rows: {
         Row: {
           error_message: string | null
@@ -1479,6 +1545,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lead_qualifications: {
+        Row: {
+          agent_id: string | null
+          buying_intent: string | null
+          call_attempt_id: string | null
+          campaign_id: string | null
+          closer_notes: string | null
+          company_id: string | null
+          contact_id: string
+          created_at: string
+          homeowner_status: string | null
+          id: string
+          insurance_involved: boolean | null
+          insurance_status: string | null
+          job_scope: string | null
+          property_address: string | null
+          roofing_issue: string | null
+          timeline: string | null
+          updated_at: string
+          urgency: Database["public"]["Enums"]["urgency_level"]
+        }
+        Insert: {
+          agent_id?: string | null
+          buying_intent?: string | null
+          call_attempt_id?: string | null
+          campaign_id?: string | null
+          closer_notes?: string | null
+          company_id?: string | null
+          contact_id: string
+          created_at?: string
+          homeowner_status?: string | null
+          id?: string
+          insurance_involved?: boolean | null
+          insurance_status?: string | null
+          job_scope?: string | null
+          property_address?: string | null
+          roofing_issue?: string | null
+          timeline?: string | null
+          updated_at?: string
+          urgency?: Database["public"]["Enums"]["urgency_level"]
+        }
+        Update: {
+          agent_id?: string | null
+          buying_intent?: string | null
+          call_attempt_id?: string | null
+          campaign_id?: string | null
+          closer_notes?: string | null
+          company_id?: string | null
+          contact_id?: string
+          created_at?: string
+          homeowner_status?: string | null
+          id?: string
+          insurance_involved?: boolean | null
+          insurance_status?: string | null
+          job_scope?: string | null
+          property_address?: string | null
+          roofing_issue?: string | null
+          timeline?: string | null
+          updated_at?: string
+          urgency?: Database["public"]["Enums"]["urgency_level"]
+        }
+        Relationships: []
       }
       notes: {
         Row: {
@@ -1899,6 +2028,7 @@ export type Database = {
         | "completed"
         | "no_show"
         | "replaced"
+      appointment_type: "on_site_inspection" | "virtual_consultation"
       call_event_type:
         | "initiated"
         | "ringing"
@@ -1936,6 +2066,14 @@ export type Database = {
         | "federal_dnc"
         | "litigator"
         | "imported"
+      follow_up_task_status: "pending" | "completed" | "skipped" | "cancelled"
+      follow_up_task_type:
+        | "confirmation_call"
+        | "reminder_24h"
+        | "send_appointment_details"
+        | "closer_handoff"
+        | "post_appointment_followup"
+        | "custom"
       import_status:
         | "uploading"
         | "mapping"
@@ -2105,6 +2243,7 @@ export const Constants = {
         "no_show",
         "replaced",
       ],
+      appointment_type: ["on_site_inspection", "virtual_consultation"],
       call_event_type: [
         "initiated",
         "ringing",
@@ -2144,6 +2283,15 @@ export const Constants = {
         "federal_dnc",
         "litigator",
         "imported",
+      ],
+      follow_up_task_status: ["pending", "completed", "skipped", "cancelled"],
+      follow_up_task_type: [
+        "confirmation_call",
+        "reminder_24h",
+        "send_appointment_details",
+        "closer_handoff",
+        "post_appointment_followup",
+        "custom",
       ],
       import_status: [
         "uploading",
