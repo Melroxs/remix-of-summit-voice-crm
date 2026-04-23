@@ -210,6 +210,48 @@ export type Database = {
           },
         ]
       }
+      audit_events: {
+        Row: {
+          actor_id: string | null
+          actor_role: string | null
+          company_id: string | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          occurred_at: string
+          user_agent: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          actor_role?: string | null
+          company_id?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          occurred_at?: string
+          user_agent?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          actor_role?: string | null
+          company_id?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          occurred_at?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       call_attempts: {
         Row: {
           agent_id: string | null
@@ -2007,6 +2049,15 @@ export type Database = {
         Returns: boolean
       }
       is_same_company: { Args: { _company_id: string }; Returns: boolean }
+      log_audit_event: {
+        Args: {
+          _entity_id?: string
+          _entity_type?: string
+          _event_type: string
+          _metadata?: Json
+        }
+        Returns: string
+      }
       release_stale_dialing_locks: { Args: never; Returns: number }
     }
     Enums: {
