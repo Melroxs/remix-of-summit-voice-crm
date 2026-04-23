@@ -1461,7 +1461,7 @@ export type Database = {
           appointment_id: string | null
           assigned_to: string | null
           campaign_id: string | null
-          company_id: string | null
+          company_id: string
           completed_at: string | null
           contact_id: string
           created_at: string
@@ -1477,7 +1477,7 @@ export type Database = {
           appointment_id?: string | null
           assigned_to?: string | null
           campaign_id?: string | null
-          company_id?: string | null
+          company_id: string
           completed_at?: string | null
           contact_id: string
           created_at?: string
@@ -1493,7 +1493,7 @@ export type Database = {
           appointment_id?: string | null
           assigned_to?: string | null
           campaign_id?: string | null
-          company_id?: string | null
+          company_id?: string
           completed_at?: string | null
           contact_id?: string
           created_at?: string
