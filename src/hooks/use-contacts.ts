@@ -43,10 +43,8 @@ export function useContacts(input: ContactsQueryInput) {
         }
       }
 
-      const applyFilters = <T extends ReturnType<typeof supabase.from<"contacts">>["select"]>(
-        q: ReturnType<T>
-      ) => {
-        let chain = q as any;
+      const applyFilters = (q: any) => {
+        let chain = q;
         if (search?.trim()) {
           const s = search.trim().replace(/[,()]/g, " ");
           chain = chain.or(
