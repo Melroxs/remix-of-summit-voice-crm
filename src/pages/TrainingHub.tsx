@@ -11,7 +11,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { GraduationCap, Phone, PhoneOff, Send, Sparkles, History, Trophy } from "lucide-react";
+import {
+  GraduationCap,
+  Phone,
+  PhoneOff,
+  Send,
+  Sparkles,
+  History,
+  Trophy,
+  Mic,
+  MicOff,
+  Keyboard,
+  Volume2,
+} from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
