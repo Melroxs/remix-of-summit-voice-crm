@@ -86,12 +86,17 @@ export default function AppSidebar() {
         <img
           src={summitLogo}
           alt="Summit Leads"
-          className="w-10 h-10 object-contain shrink-0"
+          className="w-9 h-9 object-contain shrink-0"
         />
         {!collapsed && (
-          <span className="font-bold text-primary text-base tracking-tight">
-            Summit Leads
-          </span>
+          <div className="min-w-0">
+            <p className="font-display font-bold text-foreground text-[15px] leading-tight tracking-tight truncate">
+              Summit Leads
+            </p>
+            <p className="text-[10px] uppercase tracking-wider text-sidebar-muted">
+              Sales OS
+            </p>
+          </div>
         )}
       </div>
 
@@ -140,9 +145,14 @@ export default function AppSidebar() {
       {/* Bottom */}
       <div className="p-3 border-t border-sidebar-border space-y-1">
         {!collapsed && profile && (
-          <div className="px-2 py-1 mb-2">
-            <p className="text-xs text-muted-foreground truncate">{profile.display_name || profile.email}</p>
-            <p className="text-xs text-muted-foreground/60 capitalize">{role}</p>
+          <div className="flex items-center gap-2 px-2 py-2 mb-1 rounded-md bg-sidebar-accent/40">
+            <div className="w-7 h-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-semibold shrink-0">
+              {(profile.display_name || profile.email || "?").slice(0, 2).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-sidebar-accent-foreground truncate">{profile.display_name || profile.email}</p>
+              <p className="text-[10px] uppercase tracking-wider text-sidebar-muted">{role}</p>
+            </div>
           </div>
         )}
         <button

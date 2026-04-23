@@ -14,6 +14,7 @@ import { AgentStatusBadge } from "@/components/agents/AgentStatusSelector";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { AGENT_STATUS_OPTIONS, getStatusMeta } from "@/hooks/use-agent-status";
 import { StatCard } from "@/components/reports/StatCard";
+import { PageHeader } from "@/components/common/PageHeader";
 
 interface DashStats {
   totalContacts: number;
@@ -232,13 +233,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-slide-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">Welcome back to Summit Leads CRM</p>
-        </div>
-        {isAgent && <AgentStatusSelector />}
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Welcome back to Summit Leads CRM"
+        actions={isAgent ? <AgentStatusSelector /> : undefined}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {statCards.map((stat) => (
@@ -360,7 +359,7 @@ export default function Dashboard() {
                       <p className="text-sm font-medium text-foreground">{cb.contact_name}</p>
                       <p className="text-xs text-muted-foreground">{format(new Date(cb.callback_at), "MMM d, h:mm a")}</p>
                     </div>
-                    <Badge variant="secondary" className={isPast(new Date(cb.callback_at)) ? "bg-destructive/10 text-destructive" : "bg-warning/10 text-warning"}>
+                    <Badge variant="secondary" className={isPast(new Date(cb.callback_at)) ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-warning/10 text-warning border-warning/30"}>
                       {isPast(new Date(cb.callback_at)) ? "Overdue" : "Pending"}
                     </Badge>
                   </div>
