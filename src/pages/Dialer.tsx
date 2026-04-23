@@ -396,25 +396,25 @@ export default function Dialer() {
       </div>
 
       {!agentReady && !onCall && (
-        <Alert className="mb-4 border-amber-500/30 bg-amber-500/5">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          <AlertDescription className="text-amber-300">
+        <Alert className="mb-4 border-warning/30 bg-warning/5">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning">
             You are currently <strong>{statusMeta.label}</strong>. Set your status to <strong>Ready</strong> to make calls.
           </AlertDescription>
         </Alert>
       )}
       {powerDialActive && powerDialPaused && (
-        <Alert className="mb-4 border-amber-500/30 bg-amber-500/5">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          <AlertDescription className="text-amber-300">
+        <Alert className="mb-4 border-warning/30 bg-warning/5">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning">
             Power Dial is <strong>paused</strong> — agent status is not Ready. Set status to Ready to resume auto-dialing.
           </AlertDescription>
         </Alert>
       )}
       {connectionState === "not_configured" && (
-        <Alert className="mb-4 border-amber-500/30 bg-amber-500/5">
-          <AlertTriangle className="h-4 w-4 text-amber-400" />
-          <AlertDescription className="text-amber-300">Telnyx is not fully configured yet. Please add credentials in Settings.</AlertDescription>
+        <Alert className="mb-4 border-warning/30 bg-warning/5">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning">Telnyx is not fully configured yet. Please add credentials in Settings.</AlertDescription>
         </Alert>
       )}
       {connectionState === "error" && errorMessage && (
@@ -454,7 +454,7 @@ export default function Dialer() {
                 {stats.deferred > 0 && (
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground flex items-center gap-1"><Timer className="w-3 h-3" />Deferred</span>
-                    <span className="font-medium text-amber-400">{stats.deferred}</span>
+                    <span className="font-medium text-warning">{stats.deferred}</span>
                   </div>
                 )}
                 {stats.deferred > 0 && stats.nextRetryAt && (
@@ -473,7 +473,7 @@ export default function Dialer() {
           {/* Power Dial Controls */}
           {campaignId && isPowerMode && (
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Zap className="w-4 h-4 text-amber-400" />Power Dial</CardTitle></CardHeader>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Zap className="w-4 h-4 text-warning" />Power Dial</CardTitle></CardHeader>
               <CardContent className="space-y-2">
                 {!powerDialActive ? (
                   <Button size="sm" className="w-full" onClick={startPowerDial} disabled={!canMakeCalls || stats.remaining === 0}>
@@ -486,7 +486,7 @@ export default function Dialer() {
                 )}
                 {powerDialActive && (
                   <div className="text-xs text-center">
-                    <Badge variant="outline" className={powerDialPaused ? "text-amber-400 border-amber-400/30" : "text-green-400 border-green-400/30"}>
+                    <Badge variant="outline" className={powerDialPaused ? "text-warning border-warning/30" : "text-success border-success/30"}>
                       {powerDialPaused ? "Paused" : "Active"}
                     </Badge>
                   </div>
