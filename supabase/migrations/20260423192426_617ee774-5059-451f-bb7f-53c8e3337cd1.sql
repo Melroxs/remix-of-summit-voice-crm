@@ -1,0 +1,1 @@
+DELETE FROM public.user_roles WHERE user_id = 'c3046227-a90f-4396-8ed5-f66ea42a8162' AND role = 'agent';
