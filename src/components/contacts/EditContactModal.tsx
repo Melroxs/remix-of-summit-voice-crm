@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizePhoneToE164 } from "@/lib/phone";
+import { contactSchema, firstZodMessage } from "@/lib/validation";
+import { logEvent } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,32 +42,19 @@ export default function EditContactModal({ contact, onClose, onSaved }: Props) {
     setForm((f) => ({ ...f, [field]: value }));
 
   const handleSave = async () => {
-    if (!form.first_name || !form.last_name) {
-      toast({ title: "Required", description: "First and last name are required.", variant: "destructive" });
+    const parsed = contactSchema.safeParse(form);
+    if (!parsed.success) {
+      toast({ title: "Check the form", description: firstZodMessage(parsed.error), variant: "destructive" });
       return;
     }
-
     setLoading(true);
-    let phone_e164 = "";
-    if (form.phone_raw) {
-      const result = normalizePhoneToE164(form.phone_raw);
-      if (!result.valid) {
-        toast({ title: "Invalid phone", description: result.error, variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-      phone_e164 = result.e164;
-    }
-
-    const { error } = await supabase
-      .from("contacts")
-      .update({ ...form, phone_e164 })
-      .eq("id", contact.id);
-
+    const phone_e164 = form.phone_raw ? normalizePhoneToE164(form.phone_raw).e164 : "";
+    const { error } = await supabase.from("contacts").update({ ...form, phone_e164 }).eq("id", contact.id);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Contact updated" });
+      logEvent({ type: "contact.updated", entity_type: "contact", entity_id: contact.id }).catch(() => {});
       onSaved();
     }
     setLoading(false);

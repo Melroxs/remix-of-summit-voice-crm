@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizePhoneToE164 } from "@/lib/phone";
+import { contactSchema, firstZodMessage, flattenZodErrors } from "@/lib/validation";
+import { logEvent } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +23,7 @@ interface Props {
 export default function ContactModal({ onClose, onSaved }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
@@ -42,32 +45,21 @@ export default function ContactModal({ onClose, onSaved }: Props) {
     setForm((f) => ({ ...f, [field]: value }));
 
   const handleSave = async () => {
-    if (!form.first_name || !form.last_name) {
-      toast({ title: "Required", description: "First and last name are required.", variant: "destructive" });
+    const parsed = contactSchema.safeParse(form);
+    if (!parsed.success) {
+      setFieldErrors(flattenZodErrors(parsed.error));
+      toast({ title: "Check the form", description: firstZodMessage(parsed.error), variant: "destructive" });
       return;
     }
-
+    setFieldErrors({});
     setLoading(true);
-    let phone_e164 = "";
-    if (form.phone_raw) {
-      const result = normalizePhoneToE164(form.phone_raw);
-      if (!result.valid) {
-        toast({ title: "Invalid phone", description: result.error, variant: "destructive" });
-        setLoading(false);
-        return;
-      }
-      phone_e164 = result.e164;
-    }
-
-    const { error } = await supabase.from("contacts").insert({
-      ...form,
-      phone_e164,
-    });
-
+    const phone_e164 = form.phone_raw ? normalizePhoneToE164(form.phone_raw).e164 : "";
+    const { data, error } = await supabase.from("contacts").insert({ ...form, phone_e164 }).select("id").single();
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Contact created" });
+      logEvent({ type: "contact.created", entity_type: "contact", entity_id: data?.id }).catch(() => {});
       onSaved();
     }
     setLoading(false);
