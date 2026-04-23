@@ -69,7 +69,31 @@ export default function TrainingHub() {
     booked_appointment: boolean;
   } | null>(null);
 
+  // Voice mode
+  const [mode, setMode] = useState<"text" | "voice">("voice");
+  const [listening, setListening] = useState(false);
+  const [interim, setInterim] = useState("");
+  const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [voiceSupported, setVoiceSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
+  const transcriptRef = useRef<Msg[]>([]);
+  const sendingRef = useRef(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Keep refs in sync so SpeechRecognition callbacks use fresh state
+  useEffect(() => {
+    transcriptRef.current = transcript;
+  }, [transcript]);
+  useEffect(() => {
+    sendingRef.current = sending;
+  }, [sending]);
+
+  useEffect(() => {
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) setVoiceSupported(false);
+  }, []);
 
   useEffect(() => {
     if (user) loadHistory();
