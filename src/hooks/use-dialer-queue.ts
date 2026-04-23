@@ -127,6 +127,8 @@ export function useDialerQueue(campaignId: string | null) {
 
     const t0 = performance.now();
     const now = new Date().toISOString();
+    const { data: session } = await supabase.auth.getSession();
+    const myUserId = session?.session?.user?.id || null;
     // Combine recently dialed + currently active lead for exclusion
     const excludeIds = [...recentlyDialedRef.current];
     if (activeLeadIdRef.current && !excludeIds.includes(activeLeadIdRef.current)) {
@@ -135,17 +137,18 @@ export function useDialerQueue(campaignId: string | null) {
 
     console.log(`[Queue] 🔍 Resolving next lead (lock=${lockInDb}), campaign=${campaignId}, excluding=${excludeIds.length} IDs`);
 
-    // Query candidates — uses idx_cc_queue_lookup partial index
+    // Query candidates — uses idx_cc_queue_lookup partial index.
+    // Pull a wider candidate window so suppression filters still leave us choices.
     const { data: ccRows, error } = await supabase
       .from("campaign_contacts")
-      .select("id, contact_id, attempts, dial_status")
+      .select("id, contact_id, attempts, dial_status, contacts!inner(id, locked_to_agent_id, phone_e164, company_id)")
       .eq("campaign_id", campaignId)
       .eq("dial_status", "pending")
       .or(`next_eligible_at.is.null,next_eligible_at.lte.${now}`)
       .order("priority_score", { ascending: false })
       .order("attempts", { ascending: true })
       .order("created_at", { ascending: true })
-      .limit(15);
+      .limit(50);
 
     if (error) {
       console.error("[Queue] ❌ Query error:", error.message);
@@ -157,13 +160,65 @@ export function useDialerQueue(campaignId: string | null) {
       return null;
     }
 
-    // Pick first candidate NOT in exclusion list
-    let cc = ccRows.find((r) => !excludeIds.includes(r.id)) || null;
+    // ============== SUPPRESSION ==============
+    // Build set of contact_ids whose phones are flagged DNC / wrong-number / voicemail-only.
+    const candidateContactIds = ccRows.map((r: any) => r.contact_id);
+    const [phoneFlagsRes, dncRes] = await Promise.all([
+      supabase
+        .from("contact_phone_numbers")
+        .select("contact_id, phone_e164, is_dnc, is_wrong_number, is_voicemail_only")
+        .in("contact_id", candidateContactIds),
+      supabase
+        .from("dnc_entries")
+        .select("phone_e164, company_id"),
+    ]);
 
-    // If every candidate is excluded, allow the least-recent one only as last resort
-    if (!cc && ccRows.length > 0) {
-      console.log("[Queue] ⚠️ All candidates recently dialed — allowing least-recent");
-      cc = ccRows[ccRows.length - 1];
+    const suppressedContactIds = new Set<string>();
+    const dncPhoneByCompany = new Map<string, Set<string>>(); // company_id|"global" -> phones
+    for (const d of dncRes.data || []) {
+      const key = d.company_id || "global";
+      if (!dncPhoneByCompany.has(key)) dncPhoneByCompany.set(key, new Set());
+      dncPhoneByCompany.get(key)!.add(d.phone_e164);
+    }
+
+    for (const pf of phoneFlagsRes.data || []) {
+      if (pf.is_dnc || pf.is_wrong_number || pf.is_voicemail_only) {
+        suppressedContactIds.add(pf.contact_id);
+      }
+    }
+    for (const r of ccRows as any[]) {
+      const phone = r.contacts?.phone_e164;
+      const companyId = r.contacts?.company_id;
+      if (!phone) continue;
+      const globalDnc = dncPhoneByCompany.get("global");
+      if (globalDnc?.has(phone)) suppressedContactIds.add(r.contact_id);
+      if (companyId) {
+        const companyDnc = dncPhoneByCompany.get(companyId);
+        if (companyDnc?.has(phone)) suppressedContactIds.add(r.contact_id);
+      }
+    }
+
+    // Filter out suppressed + recently dialed + locked-to-other-agent
+    const filtered = (ccRows as any[]).filter((r) => {
+      if (excludeIds.includes(r.id)) return false;
+      if (suppressedContactIds.has(r.contact_id)) return false;
+      const lockedTo = r.contacts?.locked_to_agent_id;
+      if (lockedTo && myUserId && lockedTo !== myUserId) return false;
+      return true;
+    });
+
+    // Prefer leads already locked to me (ownership continuity), else fall back
+    const myOwned = filtered.filter((r) => r.contacts?.locked_to_agent_id === myUserId);
+    const pool = myOwned.length > 0 ? myOwned : filtered;
+    let cc = pool[0] || null;
+
+    // Last-resort: if every candidate was excluded by recent-dial guard, allow least-recent
+    if (!cc) {
+      const onlyRecentExcluded = (ccRows as any[]).filter((r) => !suppressedContactIds.has(r.contact_id));
+      if (onlyRecentExcluded.length > 0) {
+        console.log("[Queue] ⚠️ All candidates recently dialed — allowing least-recent");
+        cc = onlyRecentExcluded[onlyRecentExcluded.length - 1];
+      }
     }
 
     if (!cc) return null;
