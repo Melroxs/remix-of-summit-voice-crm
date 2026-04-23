@@ -71,7 +71,7 @@ export default function TeamDashboard() {
       .in("user_id", agentIds);
 
     // Fetch today's call logs
-    let callQuery = supabase.from("call_logs").select("agent_id, duration_seconds, disposition, started_at").gte("created_at", todayISO);
+    let callQuery = supabase.from("call_attempts").select("agent_id, duration_seconds, disposition, started_at").gte("created_at", todayISO);
     if (selectedCampaign !== "all") callQuery = callQuery.eq("campaign_id", selectedCampaign);
     const { data: calls } = await callQuery;
 

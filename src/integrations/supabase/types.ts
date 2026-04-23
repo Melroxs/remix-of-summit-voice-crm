@@ -41,46 +41,10 @@ export type Database = {
         }
         Relationships: []
       }
-      agent_feedback: {
-        Row: {
-          acknowledged: boolean
-          agent_id: string
-          call_log_id: string | null
-          campaign_id: string | null
-          created_at: string
-          feedback_by: string
-          feedback_type: string
-          id: string
-          message: string
-        }
-        Insert: {
-          acknowledged?: boolean
-          agent_id: string
-          call_log_id?: string | null
-          campaign_id?: string | null
-          created_at?: string
-          feedback_by: string
-          feedback_type?: string
-          id?: string
-          message: string
-        }
-        Update: {
-          acknowledged?: boolean
-          agent_id?: string
-          call_log_id?: string | null
-          campaign_id?: string | null
-          created_at?: string
-          feedback_by?: string
-          feedback_type?: string
-          id?: string
-          message?: string
-        }
-        Relationships: []
-      }
-      ai_call_summaries: {
+      ai_summaries: {
         Row: {
           agent_id: string | null
-          call_log_id: string
+          call_attempt_id: string
           call_outcome_summary: string | null
           campaign_id: string | null
           contact_id: string | null
@@ -89,6 +53,8 @@ export type Database = {
           generation_status: string
           id: string
           next_action: string | null
+          next_step_recommendation: string | null
+          quality_score: number | null
           sentiment: string | null
           suggested_next_action: string | null
           summary: string
@@ -96,7 +62,7 @@ export type Database = {
         }
         Insert: {
           agent_id?: string | null
-          call_log_id: string
+          call_attempt_id: string
           call_outcome_summary?: string | null
           campaign_id?: string | null
           contact_id?: string | null
@@ -105,6 +71,8 @@ export type Database = {
           generation_status?: string
           id?: string
           next_action?: string | null
+          next_step_recommendation?: string | null
+          quality_score?: number | null
           sentiment?: string | null
           suggested_next_action?: string | null
           summary?: string
@@ -112,7 +80,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string | null
-          call_log_id?: string
+          call_attempt_id?: string
           call_outcome_summary?: string | null
           campaign_id?: string | null
           contact_id?: string | null
@@ -121,6 +89,8 @@ export type Database = {
           generation_status?: string
           id?: string
           next_action?: string | null
+          next_step_recommendation?: string | null
+          quality_score?: number | null
           sentiment?: string | null
           suggested_next_action?: string | null
           summary?: string
@@ -129,9 +99,9 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "ai_call_summaries_call_log_id_fkey"
-            columns: ["call_log_id"]
+            columns: ["call_attempt_id"]
             isOneToOne: false
-            referencedRelation: "call_logs"
+            referencedRelation: "call_attempts"
             referencedColumns: ["id"]
           },
         ]
@@ -143,12 +113,17 @@ export type Database = {
           appointment_at: string
           campaign_id: string | null
           city: string | null
+          closer_user_id: string | null
           contact_id: string
+          contact_phone_id: string | null
           created_at: string
+          handoff_notes: string | null
           id: string
+          job_type: string | null
           notes: string | null
           state: string | null
           status: Database["public"]["Enums"]["appointment_status"] | null
+          urgency: Database["public"]["Enums"]["urgency_level"]
           zip_code: string | null
         }
         Insert: {
@@ -157,12 +132,17 @@ export type Database = {
           appointment_at: string
           campaign_id?: string | null
           city?: string | null
+          closer_user_id?: string | null
           contact_id: string
+          contact_phone_id?: string | null
           created_at?: string
+          handoff_notes?: string | null
           id?: string
+          job_type?: string | null
           notes?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["appointment_status"] | null
+          urgency?: Database["public"]["Enums"]["urgency_level"]
           zip_code?: string | null
         }
         Update: {
@@ -171,12 +151,17 @@ export type Database = {
           appointment_at?: string
           campaign_id?: string | null
           city?: string | null
+          closer_user_id?: string | null
           contact_id?: string
+          contact_phone_id?: string | null
           created_at?: string
+          handoff_notes?: string | null
           id?: string
+          job_type?: string | null
           notes?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["appointment_status"] | null
+          urgency?: Database["public"]["Enums"]["urgency_level"]
           zip_code?: string | null
         }
         Relationships: [
@@ -201,16 +186,26 @@ export type Database = {
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "appointments_contact_phone_id_fkey"
+            columns: ["contact_phone_id"]
+            isOneToOne: false
+            referencedRelation: "contact_phone_numbers"
+            referencedColumns: ["id"]
+          },
         ]
       }
-      call_logs: {
+      call_attempts: {
         Row: {
           agent_id: string | null
+          attempt_number: number
+          call_recording_id: string | null
           call_source: string
           campaign_id: string | null
           contact_id: string | null
           created_at: string
           dial_mode_used: string | null
+          dial_session_id: string | null
           disposition: string | null
           duration_seconds: number | null
           ended_at: string | null
@@ -219,18 +214,21 @@ export type Database = {
           manual_dialed_number: string | null
           notes: string | null
           outbound_number_used: string | null
+          outcome: Database["public"]["Enums"]["call_outcome"]
           provider_used: string | null
-          recording_id: string | null
           started_at: string | null
           telnyx_call_id: string | null
         }
         Insert: {
           agent_id?: string | null
+          attempt_number?: number
+          call_recording_id?: string | null
           call_source?: string
           campaign_id?: string | null
           contact_id?: string | null
           created_at?: string
           dial_mode_used?: string | null
+          dial_session_id?: string | null
           disposition?: string | null
           duration_seconds?: number | null
           ended_at?: string | null
@@ -239,18 +237,21 @@ export type Database = {
           manual_dialed_number?: string | null
           notes?: string | null
           outbound_number_used?: string | null
+          outcome?: Database["public"]["Enums"]["call_outcome"]
           provider_used?: string | null
-          recording_id?: string | null
           started_at?: string | null
           telnyx_call_id?: string | null
         }
         Update: {
           agent_id?: string | null
+          attempt_number?: number
+          call_recording_id?: string | null
           call_source?: string
           campaign_id?: string | null
           contact_id?: string | null
           created_at?: string
           dial_mode_used?: string | null
+          dial_session_id?: string | null
           disposition?: string | null
           duration_seconds?: number | null
           ended_at?: string | null
@@ -259,12 +260,19 @@ export type Database = {
           manual_dialed_number?: string | null
           notes?: string | null
           outbound_number_used?: string | null
+          outcome?: Database["public"]["Enums"]["call_outcome"]
           provider_used?: string | null
-          recording_id?: string | null
           started_at?: string | null
           telnyx_call_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "call_attempts_dial_session_id_fkey"
+            columns: ["dial_session_id"]
+            isOneToOne: false
+            referencedRelation: "dial_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "call_logs_campaign_id_fkey"
             columns: ["campaign_id"]
@@ -288,10 +296,42 @@ export type Database = {
           },
         ]
       }
+      call_events: {
+        Row: {
+          call_attempt_id: string
+          event_type: Database["public"]["Enums"]["call_event_type"]
+          id: string
+          occurred_at: string
+          payload: Json | null
+        }
+        Insert: {
+          call_attempt_id: string
+          event_type: Database["public"]["Enums"]["call_event_type"]
+          id?: string
+          occurred_at?: string
+          payload?: Json | null
+        }
+        Update: {
+          call_attempt_id?: string
+          event_type?: Database["public"]["Enums"]["call_event_type"]
+          id?: string
+          occurred_at?: string
+          payload?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_events_call_attempt_id_fkey"
+            columns: ["call_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "call_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_monitoring_sessions: {
         Row: {
           agent_id: string
-          call_log_id: string
+          call_attempt_id: string
           campaign_id: string | null
           created_at: string
           ended_at: string | null
@@ -307,7 +347,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
-          call_log_id: string
+          call_attempt_id: string
           campaign_id?: string | null
           created_at?: string
           ended_at?: string | null
@@ -323,7 +363,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
-          call_log_id?: string
+          call_attempt_id?: string
           campaign_id?: string | null
           created_at?: string
           ended_at?: string | null
@@ -338,6 +378,88 @@ export type Database = {
           supervisor_id?: string
         }
         Relationships: []
+      }
+      call_recordings: {
+        Row: {
+          call_attempt_id: string | null
+          created_at: string
+          duration_seconds: number | null
+          format: string | null
+          id: string
+          recording_url: string | null
+          telnyx_recording_id: string | null
+        }
+        Insert: {
+          call_attempt_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          format?: string | null
+          id?: string
+          recording_url?: string | null
+          telnyx_recording_id?: string | null
+        }
+        Update: {
+          call_attempt_id?: string | null
+          created_at?: string
+          duration_seconds?: number | null
+          format?: string | null
+          id?: string
+          recording_url?: string | null
+          telnyx_recording_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recordings_call_log_id_fkey"
+            columns: ["call_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "call_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transcripts: {
+        Row: {
+          call_recording_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          language: string | null
+          source: string
+          status: string
+          transcript_text: string
+          updated_at: string
+        }
+        Insert: {
+          call_recording_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          language?: string | null
+          source?: string
+          status?: string
+          transcript_text?: string
+          updated_at?: string
+        }
+        Update: {
+          call_recording_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          language?: string | null
+          source?: string
+          status?: string
+          transcript_text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recording_transcripts_recording_id_fkey"
+            columns: ["call_recording_id"]
+            isOneToOne: false
+            referencedRelation: "call_recordings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       callbacks: {
         Row: {
@@ -397,6 +519,84 @@ export type Database = {
           },
         ]
       }
+      caller_ids: {
+        Row: {
+          answered_calls: number
+          appointments: number
+          area_code: string | null
+          company_id: string
+          cooldown_minutes: number
+          cooldown_until: string | null
+          created_at: string
+          display_name: string | null
+          health_status: Database["public"]["Enums"]["number_health_status"]
+          id: string
+          is_active: boolean
+          last_used_at: string | null
+          max_calls_per_day: number
+          max_calls_per_hour: number
+          phone_e164: string
+          provider: string
+          total_calls: number
+          updated_at: string
+        }
+        Insert: {
+          answered_calls?: number
+          appointments?: number
+          area_code?: string | null
+          company_id: string
+          cooldown_minutes?: number
+          cooldown_until?: string | null
+          created_at?: string
+          display_name?: string | null
+          health_status?: Database["public"]["Enums"]["number_health_status"]
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          max_calls_per_day?: number
+          max_calls_per_hour?: number
+          phone_e164: string
+          provider?: string
+          total_calls?: number
+          updated_at?: string
+        }
+        Update: {
+          answered_calls?: number
+          appointments?: number
+          area_code?: string | null
+          company_id?: string
+          cooldown_minutes?: number
+          cooldown_until?: string | null
+          created_at?: string
+          display_name?: string | null
+          health_status?: Database["public"]["Enums"]["number_health_status"]
+          id?: string
+          is_active?: boolean
+          last_used_at?: string | null
+          max_calls_per_day?: number
+          max_calls_per_hour?: number
+          phone_e164?: string
+          provider?: string
+          total_calls?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caller_ids_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caller_ids_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_agents: {
         Row: {
           campaign_id: string
@@ -419,6 +619,48 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "campaign_agents_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_caller_ids: {
+        Row: {
+          caller_id: string
+          campaign_id: string
+          created_at: string
+          id: string
+          priority: number
+          rotation_order: number
+        }
+        Insert: {
+          caller_id: string
+          campaign_id: string
+          created_at?: string
+          id?: string
+          priority?: number
+          rotation_order?: number
+        }
+        Update: {
+          caller_id?: string
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          priority?: number
+          rotation_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_caller_ids_caller_id_fkey"
+            columns: ["caller_id"]
+            isOneToOne: false
+            referencedRelation: "caller_ids"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_caller_ids_campaign_id_fkey"
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "campaigns"
@@ -495,54 +737,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      campaign_phone_numbers: {
-        Row: {
-          area_code: string | null
-          campaign_id: string
-          cooldown_minutes: number
-          created_at: string
-          id: string
-          is_active: boolean
-          last_used_at: string | null
-          max_calls_per_day: number
-          max_calls_per_hour: number
-          phone_number: string
-          priority: number
-          provider: string
-          rotation_order: number
-        }
-        Insert: {
-          area_code?: string | null
-          campaign_id: string
-          cooldown_minutes?: number
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          last_used_at?: string | null
-          max_calls_per_day?: number
-          max_calls_per_hour?: number
-          phone_number: string
-          priority?: number
-          provider?: string
-          rotation_order?: number
-        }
-        Update: {
-          area_code?: string | null
-          campaign_id?: string
-          cooldown_minutes?: number
-          created_at?: string
-          id?: string
-          is_active?: boolean
-          last_used_at?: string | null
-          max_calls_per_day?: number
-          max_calls_per_hour?: number
-          phone_number?: string
-          priority?: number
-          provider?: string
-          rotation_order?: number
-        }
-        Relationships: []
       }
       campaign_scripts: {
         Row: {
@@ -691,6 +885,81 @@ export type Database = {
           },
         ]
       }
+      client_notifications: {
+        Row: {
+          body: string | null
+          campaign_id: string | null
+          client_account_id: string | null
+          company_id: string
+          created_at: string
+          id: string
+          is_read: boolean
+          link_url: string | null
+          notification_type: string
+          title: string
+        }
+        Insert: {
+          body?: string | null
+          campaign_id?: string | null
+          client_account_id?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link_url?: string | null
+          notification_type: string
+          title: string
+        }
+        Update: {
+          body?: string | null
+          campaign_id?: string | null
+          client_account_id?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          link_url?: string | null
+          notification_type?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_notifications_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_notifications_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_notifications_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_notifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_notifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_users: {
         Row: {
           client_account_id: string
@@ -745,10 +1014,85 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_phone_numbers: {
+        Row: {
+          company_id: string
+          contact_id: string
+          created_at: string
+          id: string
+          is_dnc: boolean
+          is_primary: boolean
+          is_voicemail_only: boolean
+          is_wrong_number: boolean
+          last_called_at: string | null
+          phone_e164: string
+          phone_raw: string | null
+          phone_type: Database["public"]["Enums"]["phone_type"]
+        }
+        Insert: {
+          company_id: string
+          contact_id: string
+          created_at?: string
+          id?: string
+          is_dnc?: boolean
+          is_primary?: boolean
+          is_voicemail_only?: boolean
+          is_wrong_number?: boolean
+          last_called_at?: string | null
+          phone_e164: string
+          phone_raw?: string | null
+          phone_type?: Database["public"]["Enums"]["phone_type"]
+        }
+        Update: {
+          company_id?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+          is_dnc?: boolean
+          is_primary?: boolean
+          is_voicemail_only?: boolean
+          is_wrong_number?: boolean
+          last_called_at?: string | null
+          phone_e164?: string
+          phone_raw?: string | null
+          phone_type?: Database["public"]["Enums"]["phone_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_phone_numbers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_phone_numbers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_phone_numbers_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "client_contact_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_phone_numbers_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           address: string | null
           city: string | null
+          company_id: string | null
           cool_notes: string | null
           county: string | null
           created_at: string
@@ -757,9 +1101,11 @@ export type Database = {
           home_value: string | null
           household_income: string | null
           id: string
-          import_job_id: string | null
           last_name: string
+          lead_import_id: string | null
           lead_status: Database["public"]["Enums"]["lead_status"] | null
+          locked_at: string | null
+          locked_to_agent_id: string | null
           owner_renter: string | null
           phone_e164: string | null
           phone_raw: string | null
@@ -772,6 +1118,7 @@ export type Database = {
         Insert: {
           address?: string | null
           city?: string | null
+          company_id?: string | null
           cool_notes?: string | null
           county?: string | null
           created_at?: string
@@ -780,9 +1127,11 @@ export type Database = {
           home_value?: string | null
           household_income?: string | null
           id?: string
-          import_job_id?: string | null
           last_name: string
+          lead_import_id?: string | null
           lead_status?: Database["public"]["Enums"]["lead_status"] | null
+          locked_at?: string | null
+          locked_to_agent_id?: string | null
           owner_renter?: string | null
           phone_e164?: string | null
           phone_raw?: string | null
@@ -795,6 +1144,7 @@ export type Database = {
         Update: {
           address?: string | null
           city?: string | null
+          company_id?: string | null
           cool_notes?: string | null
           county?: string | null
           created_at?: string
@@ -803,9 +1153,11 @@ export type Database = {
           home_value?: string | null
           household_income?: string | null
           id?: string
-          import_job_id?: string | null
           last_name?: string
+          lead_import_id?: string | null
           lead_status?: Database["public"]["Enums"]["lead_status"] | null
+          locked_at?: string | null
+          locked_to_agent_id?: string | null
           owner_renter?: string | null
           phone_e164?: string | null
           phone_raw?: string | null
@@ -817,10 +1169,147 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "contacts_import_job_id_fkey"
-            columns: ["import_job_id"]
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "import_jobs"
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_import_job_id_fkey"
+            columns: ["lead_import_id"]
+            isOneToOne: false
+            referencedRelation: "lead_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_reports: {
+        Row: {
+          agent_id: string | null
+          campaign_id: string | null
+          company_id: string
+          created_at: string
+          id: string
+          report_date: string
+          talk_time_seconds: number
+          total_appointments: number
+          total_attempts: number
+          total_callbacks: number
+          total_connects: number
+          total_dnc: number
+          total_voicemails: number
+          total_wrong_numbers: number
+        }
+        Insert: {
+          agent_id?: string | null
+          campaign_id?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          report_date: string
+          talk_time_seconds?: number
+          total_appointments?: number
+          total_attempts?: number
+          total_callbacks?: number
+          total_connects?: number
+          total_dnc?: number
+          total_voicemails?: number
+          total_wrong_numbers?: number
+        }
+        Update: {
+          agent_id?: string | null
+          campaign_id?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          report_date?: string
+          talk_time_seconds?: number
+          total_appointments?: number
+          total_attempts?: number
+          total_callbacks?: number
+          total_connects?: number
+          total_dnc?: number
+          total_voicemails?: number
+          total_wrong_numbers?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_reports_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_reports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_reports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dial_sessions: {
+        Row: {
+          agent_id: string
+          campaign_id: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          paused_seconds: number
+          started_at: string
+          status: Database["public"]["Enums"]["dial_session_status"]
+          total_appointments: number
+          total_attempts: number
+          total_connects: number
+        }
+        Insert: {
+          agent_id: string
+          campaign_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          paused_seconds?: number
+          started_at?: string
+          status?: Database["public"]["Enums"]["dial_session_status"]
+          total_appointments?: number
+          total_attempts?: number
+          total_connects?: number
+        }
+        Update: {
+          agent_id?: string
+          campaign_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          paused_seconds?: number
+          started_at?: string
+          status?: Database["public"]["Enums"]["dial_session_status"]
+          total_appointments?: number
+          total_attempts?: number
+          total_connects?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dial_sessions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
             referencedColumns: ["id"]
           },
         ]
@@ -855,39 +1344,84 @@ export type Database = {
         }
         Relationships: []
       }
-      import_errors: {
+      dnc_entries: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          company_id: string | null
+          id: string
+          phone_e164: string
+          reason: string | null
+          source: Database["public"]["Enums"]["dnc_source"]
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          company_id?: string | null
+          id?: string
+          phone_e164: string
+          reason?: string | null
+          source?: Database["public"]["Enums"]["dnc_source"]
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          company_id?: string | null
+          id?: string
+          phone_e164?: string
+          reason?: string | null
+          source?: Database["public"]["Enums"]["dnc_source"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dnc_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dnc_entries_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_import_rows: {
         Row: {
           error_message: string | null
           id: string
-          import_job_id: string
+          lead_import_id: string
           raw_payload: Json | null
           row_number: number | null
         }
         Insert: {
           error_message?: string | null
           id?: string
-          import_job_id: string
+          lead_import_id: string
           raw_payload?: Json | null
           row_number?: number | null
         }
         Update: {
           error_message?: string | null
           id?: string
-          import_job_id?: string
+          lead_import_id?: string
           raw_payload?: Json | null
           row_number?: number | null
         }
         Relationships: [
           {
             foreignKeyName: "import_errors_import_job_id_fkey"
-            columns: ["import_job_id"]
+            columns: ["lead_import_id"]
             isOneToOne: false
-            referencedRelation: "import_jobs"
+            referencedRelation: "lead_imports"
             referencedColumns: ["id"]
           },
         ]
       }
-      import_jobs: {
+      lead_imports: {
         Row: {
           campaign_id: string | null
           column_mapping: Json | null
@@ -937,61 +1471,41 @@ export type Database = {
           },
         ]
       }
-      phone_number_stats: {
+      notes: {
         Row: {
-          answer_rate: number | null
-          answered_calls: number
-          appointment_rate: number | null
-          appointments: number
-          calls_last_hour: number
-          calls_today: number
-          cooldown_until: string | null
-          health_status: Database["public"]["Enums"]["number_health_status"]
+          acknowledged: boolean
+          agent_id: string
+          call_attempt_id: string | null
+          campaign_id: string | null
+          created_at: string
+          feedback_by: string
+          feedback_type: string
           id: string
-          last_reset_date: string
-          phone_number_id: string
-          total_calls: number
-          updated_at: string
+          message: string
         }
         Insert: {
-          answer_rate?: number | null
-          answered_calls?: number
-          appointment_rate?: number | null
-          appointments?: number
-          calls_last_hour?: number
-          calls_today?: number
-          cooldown_until?: string | null
-          health_status?: Database["public"]["Enums"]["number_health_status"]
+          acknowledged?: boolean
+          agent_id: string
+          call_attempt_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          feedback_by: string
+          feedback_type?: string
           id?: string
-          last_reset_date?: string
-          phone_number_id: string
-          total_calls?: number
-          updated_at?: string
+          message: string
         }
         Update: {
-          answer_rate?: number | null
-          answered_calls?: number
-          appointment_rate?: number | null
-          appointments?: number
-          calls_last_hour?: number
-          calls_today?: number
-          cooldown_until?: string | null
-          health_status?: Database["public"]["Enums"]["number_health_status"]
+          acknowledged?: boolean
+          agent_id?: string
+          call_attempt_id?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          feedback_by?: string
+          feedback_type?: string
           id?: string
-          last_reset_date?: string
-          phone_number_id?: string
-          total_calls?: number
-          updated_at?: string
+          message?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "phone_number_stats_phone_number_id_fkey"
-            columns: ["phone_number_id"]
-            isOneToOne: true
-            referencedRelation: "campaign_phone_numbers"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1062,10 +1576,10 @@ export type Database = {
           },
         ]
       }
-      qa_scores: {
+      qa_reviews: {
         Row: {
           agent_id: string
-          call_log_id: string
+          call_attempt_id: string
           campaign_id: string | null
           closing_score: number
           communication_score: number
@@ -1084,7 +1598,7 @@ export type Database = {
         }
         Insert: {
           agent_id: string
-          call_log_id: string
+          call_attempt_id: string
           campaign_id?: string | null
           closing_score?: number
           communication_score?: number
@@ -1103,7 +1617,7 @@ export type Database = {
         }
         Update: {
           agent_id?: string
-          call_log_id?: string
+          call_attempt_id?: string
           campaign_id?: string | null
           closing_score?: number
           communication_score?: number
@@ -1121,88 +1635,6 @@ export type Database = {
           total_score?: number | null
         }
         Relationships: []
-      }
-      recording_transcripts: {
-        Row: {
-          created_at: string
-          error_message: string | null
-          id: string
-          language: string | null
-          recording_id: string
-          source: string
-          status: string
-          transcript_text: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          language?: string | null
-          recording_id: string
-          source?: string
-          status?: string
-          transcript_text?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          error_message?: string | null
-          id?: string
-          language?: string | null
-          recording_id?: string
-          source?: string
-          status?: string
-          transcript_text?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recording_transcripts_recording_id_fkey"
-            columns: ["recording_id"]
-            isOneToOne: false
-            referencedRelation: "recordings"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      recordings: {
-        Row: {
-          call_log_id: string | null
-          created_at: string
-          duration_seconds: number | null
-          format: string | null
-          id: string
-          recording_url: string | null
-          telnyx_recording_id: string | null
-        }
-        Insert: {
-          call_log_id?: string | null
-          created_at?: string
-          duration_seconds?: number | null
-          format?: string | null
-          id?: string
-          recording_url?: string | null
-          telnyx_recording_id?: string | null
-        }
-        Update: {
-          call_log_id?: string | null
-          created_at?: string
-          duration_seconds?: number | null
-          format?: string | null
-          id?: string
-          recording_url?: string | null
-          telnyx_recording_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "recordings_call_log_id_fkey"
-            columns: ["call_log_id"]
-            isOneToOne: false
-            referencedRelation: "call_logs"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       telephony_providers: {
         Row: {
@@ -1240,7 +1672,7 @@ export type Database = {
         }
         Relationships: []
       }
-      training_simulations: {
+      training_assets: {
         Row: {
           agent_id: string
           created_at: string
@@ -1432,6 +1864,10 @@ export type Database = {
         Args: { _campaign_id: string; _user_id: string }
         Returns: boolean
       }
+      is_contact_dialable: {
+        Args: { _campaign_id: string; _contact_id: string }
+        Returns: boolean
+      }
       is_same_company: { Args: { _company_id: string }; Returns: boolean }
       release_stale_dialing_locks: { Args: never; Returns: number }
     }
@@ -1454,9 +1890,43 @@ export type Database = {
         | "completed"
         | "no_show"
         | "replaced"
+      call_event_type:
+        | "initiated"
+        | "ringing"
+        | "answered"
+        | "no_answer"
+        | "voicemail"
+        | "busy"
+        | "failed"
+        | "hangup_local"
+        | "hangup_remote"
+        | "dtmf"
+        | "recording_started"
+        | "recording_completed"
+        | "transferred"
+      call_outcome:
+        | "pending"
+        | "connected"
+        | "no_answer"
+        | "voicemail"
+        | "busy"
+        | "wrong_number"
+        | "dnc_request"
+        | "not_interested"
+        | "callback_scheduled"
+        | "appointment_booked"
+        | "already_customer"
+        | "failed"
       callback_status: "pending" | "completed" | "missed" | "cancelled"
       campaign_status: "draft" | "active" | "paused" | "completed" | "archived"
+      dial_session_status: "active" | "paused" | "ended"
       dial_status: "pending" | "dialing" | "completed" | "skipped" | "failed"
+      dnc_source:
+        | "agent"
+        | "consumer_request"
+        | "federal_dnc"
+        | "litigator"
+        | "imported"
       import_status:
         | "uploading"
         | "mapping"
@@ -1464,13 +1934,21 @@ export type Database = {
         | "completed"
         | "failed"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "dead"
+      note_type:
+        | "call_note"
+        | "contact_note"
+        | "agent_feedback"
+        | "qa_note"
+        | "system"
       number_health_status:
         | "healthy"
         | "warm"
         | "fatigued"
         | "cooling_down"
         | "blocked"
+      phone_type: "mobile" | "home" | "work" | "other"
       priority_band: "hot" | "warm" | "medium" | "low" | "excluded"
+      urgency_level: "low" | "medium" | "high" | "urgent"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1618,9 +2096,46 @@ export const Constants = {
         "no_show",
         "replaced",
       ],
+      call_event_type: [
+        "initiated",
+        "ringing",
+        "answered",
+        "no_answer",
+        "voicemail",
+        "busy",
+        "failed",
+        "hangup_local",
+        "hangup_remote",
+        "dtmf",
+        "recording_started",
+        "recording_completed",
+        "transferred",
+      ],
+      call_outcome: [
+        "pending",
+        "connected",
+        "no_answer",
+        "voicemail",
+        "busy",
+        "wrong_number",
+        "dnc_request",
+        "not_interested",
+        "callback_scheduled",
+        "appointment_booked",
+        "already_customer",
+        "failed",
+      ],
       callback_status: ["pending", "completed", "missed", "cancelled"],
       campaign_status: ["draft", "active", "paused", "completed", "archived"],
+      dial_session_status: ["active", "paused", "ended"],
       dial_status: ["pending", "dialing", "completed", "skipped", "failed"],
+      dnc_source: [
+        "agent",
+        "consumer_request",
+        "federal_dnc",
+        "litigator",
+        "imported",
+      ],
       import_status: [
         "uploading",
         "mapping",
@@ -1629,6 +2144,13 @@ export const Constants = {
         "failed",
       ],
       lead_status: ["new", "contacted", "qualified", "converted", "dead"],
+      note_type: [
+        "call_note",
+        "contact_note",
+        "agent_feedback",
+        "qa_note",
+        "system",
+      ],
       number_health_status: [
         "healthy",
         "warm",
@@ -1636,7 +2158,9 @@ export const Constants = {
         "cooling_down",
         "blocked",
       ],
+      phone_type: ["mobile", "home", "work", "other"],
       priority_band: ["hot", "warm", "medium", "low", "excluded"],
+      urgency_level: ["low", "medium", "high", "urgent"],
     },
   },
 } as const

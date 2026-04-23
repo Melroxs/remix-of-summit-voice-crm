@@ -113,7 +113,6 @@ export default function NumberHealthDashboard() {
                         {h.healthStatus.replace("_", " ")}
                       </Badge>
                     </TableCell>
-                    <TableCell>{h.callsLastHour}</TableCell>
                     <TableCell>{h.callsToday}</TableCell>
                     <TableCell>{h.totalCalls}</TableCell>
                     <TableCell>{h.answerRate}%</TableCell>

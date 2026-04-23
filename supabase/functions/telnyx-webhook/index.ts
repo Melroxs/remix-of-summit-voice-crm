@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
         const searchIds = [callControlId, callLegId, callSessionId].filter(Boolean);
         for (const searchId of searchIds) {
           const { data: callLog } = await supabase
-            .from("call_logs")
+            .from("call_attempts")
             .select("id")
             .eq("telnyx_call_id", searchId)
             .limit(1)
@@ -64,10 +64,10 @@ Deno.serve(async (req) => {
 
       // Insert recording
       const { data: recording, error: insertError } = await supabase
-        .from("recordings")
+        .from("call_recordings")
         .insert({
           telnyx_recording_id: recordingId,
-          call_log_id: callLogId,
+          call_attempt_id: callLogId,
           recording_url: downloadUrl || null,
           duration_seconds: duration ? Math.round(duration) : null,
           format,
@@ -86,8 +86,8 @@ Deno.serve(async (req) => {
       // If we found a call_log, link the recording back
       if (callLogId && recording) {
         await supabase
-          .from("call_logs")
-          .update({ recording_id: recording.id } as any)
+          .from("call_attempts")
+          .update({ call_recording_id: recording.id } as any)
           .eq("id", callLogId);
       }
 

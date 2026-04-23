@@ -25,10 +25,10 @@ export default function FeedbackModal({ agentId, agentName, callLogId, campaignI
   const handleSave = async () => {
     if (!message.trim() || !user) return;
     setSaving(true);
-    const { error } = await supabase.from("agent_feedback").insert({
+    const { error } = await supabase.from("notes").insert({
       agent_id: agentId,
       feedback_by: user.id,
-      call_log_id: callLogId || null,
+      call_attempt_id: callLogId || null,
       campaign_id: campaignId || null,
       feedback_type: type,
       message: message.trim(),

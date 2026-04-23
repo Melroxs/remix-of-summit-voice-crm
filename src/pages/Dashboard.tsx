@@ -68,7 +68,7 @@ export default function Dashboard() {
           supabase.from("contacts").select("id", { count: "exact", head: true }),
           supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "active"),
           (() => {
-            let q = supabase.from("call_logs").select("id, duration_seconds").gte("created_at", todayISO);
+            let q = supabase.from("call_attempts").select("id, duration_seconds").gte("created_at", todayISO);
             if (agentFilter) q = q.eq("agent_id", agentFilter);
             return q;
           })(),
@@ -86,7 +86,7 @@ export default function Dashboard() {
             return q;
           })(),
           (() => {
-            let q = supabase.from("call_logs").select("id, disposition, created_at, contacts(first_name, last_name)").order("created_at", { ascending: false }).limit(5);
+            let q = supabase.from("call_attempts").select("id, disposition, created_at, contacts(first_name, last_name)").order("created_at", { ascending: false }).limit(5);
             if (agentFilter) q = q.eq("agent_id", agentFilter);
             return q;
           })(),

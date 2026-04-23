@@ -29,7 +29,7 @@ export default function ImportDeleteDialog({ job, onCancel, onDeleted }: Props) 
     setDeleting(true);
     try {
       const { data, error } = await supabase.functions.invoke("delete-import", {
-        body: { import_job_id: job.id },
+        body: { lead_import_id: job.id },
       });
 
       if (error || !data?.success) {

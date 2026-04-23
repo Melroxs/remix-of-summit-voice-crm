@@ -21,7 +21,7 @@ interface LiveCall {
 
 interface MonitoringSession {
   session_id: string;
-  call_log_id: string;
+  call_attempt_id: string;
   mode: string;
 }
 
@@ -37,7 +37,7 @@ export default function LiveCallsPanel({ campaignId }: Props) {
 
   const fetchLiveCalls = useCallback(async () => {
     let query = supabase
-      .from("call_logs")
+      .from("call_attempts")
       .select("id, agent_id, started_at, telnyx_call_id, campaign_id, provider_used, contacts(first_name, last_name), campaigns(name)")
       .is("ended_at", null)
       .not("started_at", "is", null)
@@ -111,7 +111,7 @@ export default function LiveCallsPanel({ campaignId }: Props) {
         }
 
         const { data, error: fnErr } = await supabase.functions.invoke("call-monitor", {
-          body: { action: "start", call_log_id: call.id, mode },
+          body: { action: "start", call_attempt_id: call.id, mode },
         });
 
         if (fnErr) throw new Error(fnErr.message);
@@ -121,7 +121,7 @@ export default function LiveCallsPanel({ campaignId }: Props) {
         } else {
           setActiveSession({
             session_id: data.session_id,
-            call_log_id: call.id,
+            call_attempt_id: call.id,
             mode: mode!,
           });
           toast.success(`${mode!.charAt(0).toUpperCase() + mode!.slice(1)} monitoring started`);
@@ -162,7 +162,7 @@ export default function LiveCallsPanel({ campaignId }: Props) {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
-  const isMonitoringCall = (callId: string) => activeSession?.call_log_id === callId;
+  const isMonitoringCall = (callId: string) => activeSession?.call_attempt_id === callId;
   const isLoading = (callId: string, action: string, mode?: string) =>
     actionLoading === `${callId}:${action}:${mode || ""}`;
 

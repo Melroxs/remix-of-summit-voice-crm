@@ -31,9 +31,9 @@ export default function Campaigns() {
     await supabase.from("campaign_contacts").delete().eq("campaign_id", deleteTarget.id);
     await supabase.from("campaign_agents").delete().eq("campaign_id", deleteTarget.id);
     await supabase.from("campaign_scripts").delete().eq("campaign_id", deleteTarget.id);
-    await supabase.from("campaign_phone_numbers").delete().eq("campaign_id", deleteTarget.id);
+    await supabase.from("campaign_caller_ids").delete().eq("campaign_id", deleteTarget.id);
     // Unlink call logs and callbacks
-    await supabase.from("call_logs").update({ campaign_id: null }).eq("campaign_id", deleteTarget.id);
+    await supabase.from("call_attempts").update({ campaign_id: null }).eq("campaign_id", deleteTarget.id);
     await supabase.from("callbacks").update({ campaign_id: null }).eq("campaign_id", deleteTarget.id);
     await supabase.from("appointments").update({ campaign_id: null }).eq("campaign_id", deleteTarget.id);
     // Delete campaign

@@ -297,7 +297,7 @@ export function useDialerQueue(campaignId: string | null) {
 
   /**
    * Dispose the current lead: save call log, update state, compute retry.
-   * Returns the call_log_id for AI summary generation.
+   * Returns the call_attempt_id for AI summary generation.
    */
   const disposeLead = useCallback(
     async (dispositionCode: string, notes: string): Promise<string | null> => {
@@ -310,7 +310,7 @@ export function useDialerQueue(campaignId: string | null) {
       const userId = session?.session?.user?.id;
 
       // 1. Create call log
-      const { data: callLogData } = await supabase.from("call_logs").insert({
+      const { data: callLogData } = await supabase.from("call_attempts").insert({
         contact_id: currentLead.contact_id,
         campaign_id: campaignId,
         agent_id: userId || null,

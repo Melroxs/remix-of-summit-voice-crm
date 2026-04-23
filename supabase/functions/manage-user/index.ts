@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
 
     if (action === "delete") {
       // Anonymize historical records - set agent_id to null
-      await supabaseAdmin.from("call_logs").update({ agent_id: null }).eq("agent_id", target_user_id);
+      await supabaseAdmin.from("call_attempts").update({ agent_id: null }).eq("agent_id", target_user_id);
       await supabaseAdmin.from("callbacks").update({ agent_id: null }).eq("agent_id", target_user_id);
       await supabaseAdmin.from("appointments").update({ agent_id: null }).eq("agent_id", target_user_id);
 

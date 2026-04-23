@@ -32,7 +32,7 @@ export default function Imports() {
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase
-      .from("import_jobs")
+      .from("lead_imports")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(20);
@@ -77,7 +77,7 @@ export default function Imports() {
     const userId = session?.session?.user?.id;
 
     const { data: job, error } = await supabase
-      .from("import_jobs")
+      .from("lead_imports")
       .insert({
         filename: fileName,
         total_rows: csvRows.length,

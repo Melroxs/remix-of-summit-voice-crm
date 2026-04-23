@@ -70,7 +70,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
         { data: callbacks },
         { data: appointments },
       ] = await Promise.all([
-        supabase.from("call_logs").select("*").eq("contact_id", contactId)
+        supabase.from("call_attempts").select("*").eq("contact_id", contactId)
           .order("created_at", { ascending: false }).limit(50),
         supabase.from("callbacks").select("*").eq("contact_id", contactId)
           .order("callback_at", { ascending: false }).limit(30),
@@ -102,10 +102,10 @@ export default function ContactActivityTimeline({ contactId }: Props) {
           ? supabase.from("campaigns").select("id, name").in("id", Array.from(campaignIds))
           : { data: [] },
         logIds.length > 0
-          ? supabase.from("recordings").select("id, call_log_id, duration_seconds").in("call_log_id", logIds)
+          ? supabase.from("call_recordings").select("id, call_attempt_id, duration_seconds").in("call_attempt_id", logIds)
           : { data: [] },
         logIds.length > 0
-          ? supabase.from("ai_call_summaries").select("call_log_id, summary, next_action, sentiment, call_outcome_summary, generation_status, error_message").in("call_log_id", logIds)
+          ? supabase.from("ai_summaries").select("call_attempt_id, summary, next_action, sentiment, call_outcome_summary, generation_status, error_message").in("call_attempt_id", logIds)
           : { data: [] },
       ]);
 
@@ -118,9 +118,9 @@ export default function ContactActivityTimeline({ contactId }: Props) {
       const campaignMap = new Map<string, string>();
       (campaignsRes.data || []).forEach((c: any) => campaignMap.set(c.id, c.name));
       const recMap = new Map<string, any>();
-      (recsRes.data || []).forEach((r: any) => { if (r.call_log_id) recMap.set(r.call_log_id, r); });
+      (recsRes.data || []).forEach((r: any) => { if (r.call_attempt_id) recMap.set(r.call_attempt_id, r); });
       const aiMap = new Map<string, any>();
-      (aiRes.data || []).forEach((s: any) => { if (s.call_log_id) aiMap.set(s.call_log_id, s); });
+      (aiRes.data || []).forEach((s: any) => { if (s.call_attempt_id) aiMap.set(s.call_attempt_id, s); });
 
       const timeline: TimelineEntry[] = [];
 
@@ -189,7 +189,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
     audioRef.current?.pause();
     setPlayingId(recId);
     try {
-      const { data } = await supabase.functions.invoke("get-recording-url", { body: { recording_id: recId } });
+      const { data } = await supabase.functions.invoke("get-recording-url", { body: { call_recording_id: recId } });
       if (!data?.url) { setPlayingId(null); return; }
       const audio = new Audio(data.url);
       audio.play();
@@ -202,7 +202,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
     setGeneratingAi(callLogId);
     try {
       const { data, error } = await supabase.functions.invoke("ai-call-summary", {
-        body: { call_log_id: callLogId, regenerate },
+        body: { call_attempt_id: callLogId, regenerate },
       });
       if (error) {
         toast({ title: "AI Summary Error", description: error.message, variant: "destructive" });
@@ -330,7 +330,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
                           </span>
                         )}
                         <button onClick={async () => {
-                          const { data } = await supabase.functions.invoke("get-recording-url", { body: { recording_id: entry.recording!.id } });
+                          const { data } = await supabase.functions.invoke("get-recording-url", { body: { call_recording_id: entry.recording!.id } });
                           if (data?.url) window.open(data.url, "_blank");
                         }} className="text-muted-foreground hover:text-foreground ml-auto" title="Download">
                           <Disc3 className="w-2.5 h-2.5" />

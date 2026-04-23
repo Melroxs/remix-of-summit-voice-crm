@@ -170,7 +170,7 @@ export async function processImport(
         }
       }
 
-      toInsert.push({ ...contact, import_job_id: jobId });
+      toInsert.push({ ...contact, lead_import_id: jobId });
     }
 
     // Batch insert
@@ -203,7 +203,7 @@ export async function processImport(
 
   // Update import job
   await supabase
-    .from("import_jobs")
+    .from("lead_imports")
     .update({
       status: result.failed > 0 && result.successful === 0 ? "failed" : "completed",
       processed_rows: rows.length,
@@ -215,12 +215,12 @@ export async function processImport(
   // Store errors
   if (result.errors.length > 0) {
     const errorRows = result.errors.slice(0, 500).map((e) => ({
-      import_job_id: jobId,
+      lead_import_id: jobId,
       row_number: e.row,
       error_message: e.message,
       raw_payload: buildErrorMetadata(e.data),
     }));
-    await supabase.from("import_errors").insert(errorRows);
+    await supabase.from("lead_import_rows").insert(errorRows);
   }
 
   return result;

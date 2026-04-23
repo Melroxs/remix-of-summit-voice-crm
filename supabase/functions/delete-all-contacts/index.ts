@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       await adminClient.from("callbacks").delete().in("contact_id", ids);
       await adminClient.from("appointments").delete().in("contact_id", ids);
       await adminClient.from("campaign_contacts").delete().in("contact_id", ids);
-      await adminClient.from("call_logs").update({ contact_id: null }).in("contact_id", ids);
+      await adminClient.from("call_attempts").update({ contact_id: null }).in("contact_id", ids);
 
       const { count } = await adminClient
         .from("contacts")

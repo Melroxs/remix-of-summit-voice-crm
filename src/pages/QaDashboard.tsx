@@ -17,7 +17,7 @@ interface AgentQa {
 
 interface RecentScore {
   id: string;
-  call_log_id: string;
+  call_attempt_id: string;
   agent_id: string;
   agent_name: string;
   total_score: number;
@@ -41,7 +41,7 @@ export default function QaDashboard() {
   const fetchData = async () => {
     setLoading(true);
 
-    let query = supabase.from("qa_scores").select("id, call_log_id, agent_id, total_score, created_at, strengths, improvement_feedback, campaign_id");
+    let query = supabase.from("qa_reviews").select("id, call_attempt_id, agent_id, total_score, created_at, strengths, improvement_feedback, campaign_id");
     if (selectedCampaign !== "all") query = query.eq("campaign_id", selectedCampaign);
 
     const { data: scores } = await query.order("created_at", { ascending: false });
@@ -77,7 +77,7 @@ export default function QaDashboard() {
     // Recent scores
     setRecentScores((scores || []).slice(0, 20).map(s => ({
       id: s.id,
-      call_log_id: s.call_log_id,
+      call_attempt_id: s.call_attempt_id,
       agent_id: s.agent_id,
       agent_name: profileMap[s.agent_id] || "Unknown",
       total_score: Number(s.total_score) || 0,

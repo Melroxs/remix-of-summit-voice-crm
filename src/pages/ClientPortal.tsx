@@ -72,7 +72,7 @@ export default function ClientPortal() {
       // Fetch stats in parallel
       const [callsRes, appointmentsRes, upcomingRes] = await Promise.all([
         supabase
-          .from("call_logs")
+          .from("call_attempts")
           .select("id", { count: "exact", head: true })
           .in("campaign_id", campaignIds),
         supabase
