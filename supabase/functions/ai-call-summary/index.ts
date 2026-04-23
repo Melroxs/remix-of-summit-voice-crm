@@ -71,6 +71,35 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceKey);
 
+    // Authorization: caller must be the call's agent OR have an admin/manager/team_leader role.
+    const { data: callAccess } = await adminClient
+      .from("call_attempts")
+      .select("agent_id, campaign_id")
+      .eq("id", call_attempt_id)
+      .maybeSingle();
+
+    if (!callAccess) {
+      return new Response(JSON.stringify({ error: "Call log not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const isOwner = callAccess.agent_id === caller.id;
+    let hasPrivilegedRole = false;
+    if (!isOwner) {
+      const { data: roles } = await adminClient
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", caller.id);
+      const privileged = new Set(["admin", "manager", "team_leader"]);
+      hasPrivilegedRole = (roles ?? []).some((r: { role: string }) => privileged.has(r.role));
+    }
+    if (!isOwner && !hasPrivilegedRole) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // If regenerating, delete existing summary
     if (regenerate) {
       await adminClient.from("ai_summaries").delete().eq("call_attempt_id", call_attempt_id);
