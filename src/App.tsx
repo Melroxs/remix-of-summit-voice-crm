@@ -27,6 +27,9 @@ const QaDashboard = lazy(() => import("@/pages/QaDashboard"));
 const AgentPerformance = lazy(() => import("@/pages/AgentPerformance"));
 const MyFeedback = lazy(() => import("@/pages/MyFeedback"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
+const Appointments = lazy(() => import("@/pages/Appointments"));
+const DialerScripts = lazy(() => import("@/pages/DialerScripts"));
+const TrainingHub = lazy(() => import("@/pages/TrainingHub"));
 
 const queryClient = new QueryClient();
 
@@ -94,6 +97,15 @@ const App = () => (
                 } />
                 <Route path="/callbacks" element={
                   <RoleGuard allowedRoles={["admin", "agent"]}><Callbacks /></RoleGuard>
+                } />
+                <Route path="/appointments" element={
+                  <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><Appointments /></RoleGuard>
+                } />
+                <Route path="/scripts" element={
+                  <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><DialerScripts /></RoleGuard>
+                } />
+                <Route path="/training" element={
+                  <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><TrainingHub /></RoleGuard>
                 } />
 
                 <Route path="/campaigns" element={
