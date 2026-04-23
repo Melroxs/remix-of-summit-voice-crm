@@ -528,7 +528,7 @@ export default function Dialer() {
                   </Button>
                 ) : !onCall ? (
                   <>
-                    <Button size="lg" className="rounded-full w-16 h-16 bg-green-500 hover:bg-green-600" onClick={handleStartCall} disabled={!canMakeCalls}>
+                    <Button size="lg" className="rounded-full w-16 h-16 bg-success hover:bg-success/90 text-success-foreground" onClick={handleStartCall} disabled={!canMakeCalls}>
                       <Phone className="w-6 h-6" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={handleSkip}><SkipForward className="w-4 h-4 mr-1" />Skip</Button>
@@ -543,9 +543,9 @@ export default function Dialer() {
                 <div className="flex items-center justify-center mt-4 gap-2">
                   <Clock className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-mono text-foreground">{formatTime(callTimer)}</span>
-                  {held && <Badge variant="outline" className="text-amber-400 border-amber-400/30 text-[10px]">ON HOLD</Badge>}
+                  {held && <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">ON HOLD</Badge>}
                   {muted && <Badge variant="outline" className="text-destructive border-destructive/30 text-[10px]">MUTED</Badge>}
-                  {powerDialActive && <Badge variant="outline" className="text-amber-400 border-amber-400/30 text-[10px]">⚡ POWER</Badge>}
+                  {powerDialActive && <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">⚡ POWER</Badge>}
                 </div>
               )}
             </CardContent>
