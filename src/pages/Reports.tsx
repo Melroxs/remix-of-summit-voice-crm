@@ -1,289 +1,532 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
-  LineChart, Line,
+  PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
-import { Phone, CalendarClock, TrendingUp, Clock, Users } from "lucide-react";
+import {
+  Phone, CalendarClock, TrendingUp, Users, Target, Repeat, ShieldOff, Disc3,
+  PhoneIncoming, BarChart3,
+} from "lucide-react";
+import { ReportFilters, type DateRange, rangeFromPreset } from "@/components/reports/ReportFilters";
+import { StatCard } from "@/components/reports/StatCard";
+import { EmptyState } from "@/components/reports/EmptyState";
+import { exportToCsv } from "@/lib/export-csv";
 
-interface CallLog {
+interface CallRow {
   id: string;
   agent_id: string | null;
   campaign_id: string | null;
+  contact_id: string | null;
   disposition: string | null;
+  outcome: string | null;
   duration_seconds: number | null;
+  attempt_number: number | null;
+  call_recording_id: string | null;
   created_at: string;
 }
 
-interface Campaign {
+interface AppointmentRow {
   id: string;
-  name: string;
+  campaign_id: string | null;
+  agent_id: string | null;
+  status: string | null;
+  appointment_at: string;
+  created_at: string;
 }
 
-const COLORS = [
-  "hsl(var(--primary))",
-  "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
-  "#ec4899", "#06b6d4", "#84cc16", "#f97316",
-];
+interface SessionRow {
+  agent_id: string;
+  started_at: string;
+  ended_at: string | null;
+  paused_seconds: number;
+}
 
-const DISPO_COLORS: Record<string, string> = {
-  no_answer: "#6b7280",
-  voicemail: "#8b5cf6",
-  wrong_number: "#ef4444",
-  dnc: "#dc2626",
-  not_interested: "#f97316",
-  callback: "#f59e0b",
-  appointment_booked: "#10b981",
-  have_solar: "#06b6d4",
-};
+const COLORS = ["hsl(var(--primary))", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
+
+const CONNECTED_OUTCOMES = new Set([
+  "connected",
+  "appointment_booked",
+  "callback_scheduled",
+  "not_interested",
+  "dnc_request",
+  "already_customer",
+  "wrong_number",
+]);
+
+const CONVERSATION_OUTCOMES = new Set([
+  "connected",
+  "appointment_booked",
+  "callback_scheduled",
+  "not_interested",
+  "already_customer",
+]);
+
+function fmtDuration(s: number | null | undefined) {
+  if (!s) return "0s";
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  if (m === 0) return `${sec}s`;
+  return `${m}m ${sec}s`;
+}
 
 export default function Reports() {
-  const [calls, setCalls] = useState<CallLog[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [profiles, setProfiles] = useState<{ user_id: string; display_name: string | null; email: string | null }[]>([]);
+  const [range, setRange] = useState<DateRange>(() => rangeFromPreset(30));
   const [selectedCampaign, setSelectedCampaign] = useState<string>("all");
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
+  const [profiles, setProfiles] = useState<{ user_id: string; display_name: string | null; email: string | null }[]>([]);
+
+  const [calls, setCalls] = useState<CallRow[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [totalContacts, setTotalContacts] = useState(0);
+  const [callbackBacklog, setCallbackBacklog] = useState(0);
+  const [dncCount, setDncCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Reference data (campaigns, profiles)
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      const [callsRes, campaignsRes, profilesRes] = await Promise.all([
-        supabase.from("call_attempts").select("id, agent_id, campaign_id, disposition, duration_seconds, created_at").order("created_at", { ascending: true }),
-        supabase.from("campaigns").select("id, name").order("name"),
-        supabase.from("profiles").select("user_id, display_name, email"),
-      ]);
-      setCalls(callsRes.data || []);
-      setCampaigns(campaignsRes.data || []);
-      setProfiles(profilesRes.data || []);
-      setLoading(false);
-    };
-    fetchData();
+    Promise.all([
+      supabase.from("campaigns").select("id, name").order("name"),
+      supabase.from("profiles").select("user_id, display_name, email"),
+    ]).then(([camps, profs]) => {
+      setCampaigns(camps.data || []);
+      setProfiles(profs.data || []);
+    });
   }, []);
 
-  const filtered = useMemo(() => {
-    if (selectedCampaign === "all") return calls;
-    return calls.filter((c) => c.campaign_id === selectedCampaign);
-  }, [calls, selectedCampaign]);
+  // Fetch the reporting dataset
+  useEffect(() => {
+    const fromIso = new Date(range.from).toISOString();
+    const toIso = new Date(new Date(range.to).setHours(23, 59, 59, 999)).toISOString();
 
-  // --- Call Volume by Day ---
-  const volumeByDay = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const c of filtered) {
-      const day = new Date(c.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      map.set(day, (map.get(day) || 0) + 1);
+    const fetchAll = async () => {
+      setLoading(true);
+      const buildCall = () => {
+        let q = supabase
+          .from("call_attempts")
+          .select("id, agent_id, campaign_id, contact_id, disposition, outcome, duration_seconds, attempt_number, call_recording_id, created_at")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .order("created_at", { ascending: true })
+          .limit(5000);
+        if (selectedCampaign !== "all") q = q.eq("campaign_id", selectedCampaign);
+        return q;
+      };
+      const buildAppt = () => {
+        let q = supabase
+          .from("appointments")
+          .select("id, campaign_id, agent_id, status, appointment_at, created_at")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .limit(5000);
+        if (selectedCampaign !== "all") q = q.eq("campaign_id", selectedCampaign);
+        return q;
+      };
+      const buildSessions = () => {
+        return supabase
+          .from("dial_sessions")
+          .select("agent_id, started_at, ended_at, paused_seconds")
+          .gte("started_at", fromIso)
+          .lte("started_at", toIso)
+          .limit(5000);
+      };
+
+      const [callsRes, apptsRes, sessRes, contactsRes, callbacksRes, dncRes] = await Promise.all([
+        buildCall(),
+        buildAppt(),
+        buildSessions(),
+        supabase.from("contacts").select("id", { count: "exact", head: true }),
+        supabase
+          .from("callbacks")
+          .select("id", { count: "exact", head: true })
+          .eq("status", "pending")
+          .lte("callback_at", new Date().toISOString()),
+        supabase.from("dnc_entries").select("id", { count: "exact", head: true }),
+      ]);
+
+      setCalls(callsRes.data || []);
+      setAppointments(apptsRes.data || []);
+      setSessions((sessRes.data as SessionRow[]) || []);
+      setTotalContacts(contactsRes.count || 0);
+      setCallbackBacklog(callbacksRes.count || 0);
+      setDncCount(dncRes.count || 0);
+      setLoading(false);
+    };
+    fetchAll();
+  }, [range, selectedCampaign]);
+
+  const campaignName = (id: string | null) =>
+    id ? campaigns.find((c) => c.id === id)?.name || "Unknown" : "—";
+  const agentName = (id: string | null) => {
+    if (!id) return "Unassigned";
+    const p = profiles.find((x) => x.user_id === id);
+    return p?.display_name || p?.email?.split("@")[0] || id.slice(0, 8);
+  };
+
+  // ----- Core ROI metrics -----
+  const metrics = useMemo(() => {
+    const totalAttempts = calls.length;
+    const connects = calls.filter((c) => CONNECTED_OUTCOMES.has(c.outcome ?? "")).length;
+    const conversations = calls.filter((c) => CONVERSATION_OUTCOMES.has(c.outcome ?? "")).length;
+    const booked = appointments.length;
+    const recordingsAvailable = calls.filter((c) => c.call_recording_id).length;
+
+    // avg attempts to connect: per contact, count attempts up to and including the first connect
+    const perContact = new Map<string, CallRow[]>();
+    for (const c of calls) {
+      if (!c.contact_id) continue;
+      const arr = perContact.get(c.contact_id) ?? [];
+      arr.push(c);
+      perContact.set(c.contact_id, arr);
     }
-    return Array.from(map.entries()).map(([date, count]) => ({ date, calls: count }));
-  }, [filtered]);
+    let attemptsToConnectSum = 0;
+    let connectedContactCount = 0;
+    perContact.forEach((rows) => {
+      rows.sort((a, b) => a.created_at.localeCompare(b.created_at));
+      let attempts = 0;
+      for (const r of rows) {
+        attempts++;
+        if (CONNECTED_OUTCOMES.has(r.outcome ?? "")) {
+          attemptsToConnectSum += attempts;
+          connectedContactCount++;
+          break;
+        }
+      }
+    });
+    const avgAttemptsToConnect =
+      connectedContactCount > 0 ? attemptsToConnectSum / connectedContactCount : 0;
 
-  // --- Disposition Breakdown ---
+    return {
+      totalAttempts,
+      connects,
+      conversations,
+      booked,
+      recordingsAvailable,
+      avgAttemptsToConnect,
+      connectRate: totalAttempts > 0 ? (connects / totalAttempts) * 100 : 0,
+      conversationRate: totalAttempts > 0 ? (conversations / totalAttempts) * 100 : 0,
+      bookingRate: connects > 0 ? (booked / connects) * 100 : 0,
+      recordingRate: totalAttempts > 0 ? (recordingsAvailable / totalAttempts) * 100 : 0,
+    };
+  }, [calls, appointments]);
+
+  // ----- Outcomes by disposition -----
   const dispoBreakdown = useMemo(() => {
     const map = new Map<string, number>();
-    for (const c of filtered) {
-      const d = c.disposition || "unknown";
-      map.set(d, (map.get(d) || 0) + 1);
+    for (const c of calls) {
+      const key = c.disposition || c.outcome || "unknown";
+      map.set(key, (map.get(key) || 0) + 1);
     }
     return Array.from(map.entries())
-      .map(([name, value]) => ({ name: name.replace(/_/g, " "), value, code: name }))
+      .map(([code, value]) => ({ code, name: code.replace(/_/g, " "), value }))
       .sort((a, b) => b.value - a.value);
-  }, [filtered]);
+  }, [calls]);
 
-  // --- Agent Performance ---
-  const agentPerf = useMemo(() => {
-    const map = new Map<string, { calls: number; totalDuration: number; appointments: number }>();
-    for (const c of filtered) {
-      const agentId = c.agent_id || "unknown";
-      const existing = map.get(agentId) || { calls: 0, totalDuration: 0, appointments: 0 };
-      existing.calls++;
-      existing.totalDuration += c.duration_seconds || 0;
-      if (c.disposition === "appointment_booked") existing.appointments++;
-      map.set(agentId, existing);
+  // ----- Appointments by campaign / agent -----
+  const apptByCampaign = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of appointments) {
+      const key = a.campaign_id ?? "none";
+      map.set(key, (map.get(key) || 0) + 1);
     }
-    return Array.from(map.entries()).map(([agentId, data]) => {
-      const profile = profiles.find((p) => p.user_id === agentId);
-      return {
-        agent: profile?.display_name || profile?.email?.split("@")[0] || agentId.slice(0, 8),
-        calls: data.calls,
-        avgDuration: data.calls > 0 ? Math.round(data.totalDuration / data.calls) : 0,
-        appointments: data.appointments,
-      };
-    }).sort((a, b) => b.calls - a.calls);
-  }, [filtered, profiles]);
+    return Array.from(map.entries())
+      .map(([id, count]) => ({ name: campaignName(id === "none" ? null : id), count }))
+      .sort((a, b) => b.count - a.count);
+  }, [appointments, campaigns]);
 
-  // --- Summary Stats ---
-  const totalCalls = filtered.length;
-  const totalAppointments = filtered.filter((c) => c.disposition === "appointment_booked").length;
-  const avgDuration = totalCalls > 0
-    ? Math.round(filtered.reduce((sum, c) => sum + (c.duration_seconds || 0), 0) / totalCalls)
-    : 0;
-  const conversionRate = totalCalls > 0 ? ((totalAppointments / totalCalls) * 100).toFixed(1) : "0";
+  const apptByAgent = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of appointments) {
+      const key = a.agent_id ?? "none";
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([id, count]) => ({ name: agentName(id === "none" ? null : id), count }))
+      .sort((a, b) => b.count - a.count);
+  }, [appointments, profiles]);
 
-  const summaryStats = [
-    { label: "Total Calls", value: totalCalls, icon: Phone },
-    { label: "Appointments", value: totalAppointments, icon: CalendarClock },
-    { label: "Conversion Rate", value: `${conversionRate}%`, icon: TrendingUp },
-    { label: "Avg Duration", value: `${Math.floor(avgDuration / 60)}m ${avgDuration % 60}s`, icon: Clock },
-    { label: "Active Agents", value: new Set(filtered.map((c) => c.agent_id).filter(Boolean)).size, icon: Users },
-  ];
+  // ----- Daily trend -----
+  const dailyTrend = useMemo(() => {
+    const map = new Map<string, { attempts: number; connects: number; appts: number }>();
+    for (const c of calls) {
+      const day = c.created_at.slice(0, 10);
+      const e = map.get(day) || { attempts: 0, connects: 0, appts: 0 };
+      e.attempts++;
+      if (CONNECTED_OUTCOMES.has(c.outcome ?? "")) e.connects++;
+      map.set(day, e);
+    }
+    for (const a of appointments) {
+      const day = a.created_at.slice(0, 10);
+      const e = map.get(day) || { attempts: 0, connects: 0, appts: 0 };
+      e.appts++;
+      map.set(day, e);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, v]) => ({
+        date: new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        ...v,
+      }));
+  }, [calls, appointments]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
+  // ----- Agent session time -----
+  const agentSessions = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of sessions) {
+      const start = new Date(s.started_at).getTime();
+      const end = s.ended_at ? new Date(s.ended_at).getTime() : Date.now();
+      const duration = Math.max(0, Math.floor((end - start) / 1000) - (s.paused_seconds || 0));
+      map.set(s.agent_id, (map.get(s.agent_id) || 0) + duration);
+    }
+    return Array.from(map.entries())
+      .map(([agent_id, seconds]) => ({ agent: agentName(agent_id), seconds }))
+      .sort((a, b) => b.seconds - a.seconds);
+  }, [sessions, profiles]);
+
+  // ----- Per-agent ROI table -----
+  const agentTable = useMemo(() => {
+    const map = new Map<string, { attempts: number; connects: number; appts: number; talk: number }>();
+    for (const c of calls) {
+      const id = c.agent_id ?? "none";
+      const e = map.get(id) || { attempts: 0, connects: 0, appts: 0, talk: 0 };
+      e.attempts++;
+      if (CONNECTED_OUTCOMES.has(c.outcome ?? "")) e.connects++;
+      e.talk += c.duration_seconds || 0;
+      map.set(id, e);
+    }
+    for (const a of appointments) {
+      const id = a.agent_id ?? "none";
+      const e = map.get(id) || { attempts: 0, connects: 0, appts: 0, talk: 0 };
+      e.appts++;
+      map.set(id, e);
+    }
+    return Array.from(map.entries())
+      .map(([agent_id, v]) => ({
+        agent: agentName(agent_id === "none" ? null : agent_id),
+        attempts: v.attempts,
+        connects: v.connects,
+        appts: v.appts,
+        talkTime: v.talk,
+        connectRate: v.attempts > 0 ? (v.connects / v.attempts) * 100 : 0,
+        bookingRate: v.connects > 0 ? (v.appts / v.connects) * 100 : 0,
+      }))
+      .sort((a, b) => b.appts - a.appts);
+  }, [calls, appointments, profiles]);
+
+  const handleExport = () => {
+    exportToCsv(`reports-${range.from.toISOString().slice(0,10)}-to-${range.to.toISOString().slice(0,10)}`, agentTable, [
+      { key: "agent", label: "Agent" },
+      { key: "attempts", label: "Dial Attempts" },
+      { key: "connects", label: "Connects" },
+      { key: "appts", label: "Appointments" },
+      { key: "connectRate", label: "Connect Rate %" },
+      { key: "bookingRate", label: "Booking Rate %" },
+      { key: "talkTime", label: "Talk Time (s)" },
+    ]);
+  };
 
   return (
     <div className="space-y-6 animate-slide-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Reports</h1>
-          <p className="text-muted-foreground text-sm mt-1">Campaign performance and agent analytics</p>
-        </div>
-        <Select value={selectedCampaign} onValueChange={setSelectedCampaign}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="All Campaigns" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Campaigns</SelectItem>
-            {campaigns.map((c) => (
-              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Reports</h1>
+        <p className="text-muted-foreground text-sm mt-1">Outbound roofing performance and ROI</p>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        {summaryStats.map((stat) => (
-          <Card key={stat.label}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{stat.label}</CardTitle>
-              <stat.icon className="w-4 h-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+      <ReportFilters
+        range={range}
+        onRangeChange={setRange}
+        campaigns={campaigns}
+        selectedCampaign={selectedCampaign}
+        onCampaignChange={setSelectedCampaign}
+        onExport={handleExport}
+        exportLabel="Export agents CSV"
+      />
+
+      {/* Top KPI grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <StatCard label="Leads loaded" value={totalContacts.toLocaleString()} icon={Users} loading={loading} hint="all-time" />
+        <StatCard label="Dial attempts" value={metrics.totalAttempts.toLocaleString()} icon={Phone} loading={loading} accent="primary" />
+        <StatCard label="Connect rate" value={`${metrics.connectRate.toFixed(1)}%`} icon={PhoneIncoming} loading={loading} accent="success" hint={`${metrics.connects} connects`} />
+        <StatCard label="Conversation rate" value={`${metrics.conversationRate.toFixed(1)}%`} icon={BarChart3} loading={loading} hint={`${metrics.conversations} convos`} />
+        <StatCard label="Booking rate" value={`${metrics.bookingRate.toFixed(1)}%`} icon={Target} loading={loading} accent="success" hint="of connects" />
+        <StatCard label="Avg attempts → connect" value={metrics.avgAttemptsToConnect.toFixed(1)} icon={Repeat} loading={loading} />
+        <StatCard label="Appointments" value={metrics.booked.toLocaleString()} icon={CalendarClock} loading={loading} accent="success" />
+        <StatCard label="Callback backlog" value={callbackBacklog.toLocaleString()} icon={CalendarClock} loading={loading} accent={callbackBacklog > 0 ? "warning" : "default"} hint="overdue or due now" />
+        <StatCard label="DNC entries" value={dncCount.toLocaleString()} icon={ShieldOff} loading={loading} accent="destructive" />
+        <StatCard label="Recordings available" value={`${metrics.recordingRate.toFixed(0)}%`} icon={Disc3} loading={loading} hint={`${metrics.recordingsAvailable} of ${metrics.totalAttempts}`} />
+        <StatCard label="Active agents" value={new Set(calls.map((c) => c.agent_id).filter(Boolean)).size} icon={Users} loading={loading} />
+        <StatCard label="Total talk time" value={fmtDuration(calls.reduce((s, c) => s + (c.duration_seconds || 0), 0))} icon={TrendingUp} loading={loading} />
       </div>
+
+      {/* Daily trend */}
+      <Card>
+        <CardHeader><CardTitle className="text-lg">Daily activity</CardTitle></CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-[280px] w-full" />
+          ) : dailyTrend.length === 0 ? (
+            <EmptyState icon={BarChart3} title="No activity in this range" description="Adjust the date range or pick a different campaign." />
+          ) : (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={dailyTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                <Line type="monotone" dataKey="attempts" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} name="Attempts" />
+                <Line type="monotone" dataKey="connects" stroke="#10b981" strokeWidth={2} dot={false} name="Connects" />
+                <Line type="monotone" dataKey="appts" stroke="#f59e0b" strokeWidth={2} dot={false} name="Appointments" />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Call Volume Chart */}
+        {/* Outcomes by disposition */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Call Volume</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-lg">Outcomes by disposition</CardTitle></CardHeader>
           <CardContent>
-            {volumeByDay.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">No call data yet.</p>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : dispoBreakdown.length === 0 ? (
+              <EmptyState icon={Phone} title="No call outcomes yet" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={volumeByDay}>
+                <PieChart>
+                  <Pie data={dispoBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={100} paddingAngle={2}
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+                    {dispoBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Appointments by campaign */}
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Appointments by campaign</CardTitle></CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : apptByCampaign.length === 0 ? (
+              <EmptyState icon={CalendarClock} title="No appointments yet" />
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={apptByCampaign} layout="vertical" margin={{ left: 80 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      color: "hsl(var(--foreground))",
-                    }}
-                  />
-                  <Bar dataKey="calls" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                  <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} width={100} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             )}
           </CardContent>
         </Card>
 
-        {/* Disposition Breakdown */}
+        {/* Appointments by agent */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Disposition Breakdown</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-lg">Appointments by agent</CardTitle></CardHeader>
           <CardContent>
-            {dispoBreakdown.length === 0 ? (
-              <p className="text-muted-foreground text-sm text-center py-8">No disposition data.</p>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : apptByAgent.length === 0 ? (
+              <EmptyState icon={Users} title="No agent appointments yet" />
             ) : (
               <ResponsiveContainer width="100%" height={280}>
-                <PieChart>
-                  <Pie
-                    data={dispoBreakdown}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={100}
-                    paddingAngle={2}
-                    dataKey="value"
-                    nameKey="name"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {dispoBreakdown.map((entry, i) => (
-                      <Cell key={entry.code} fill={DISPO_COLORS[entry.code] || COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      color: "hsl(var(--foreground))",
-                    }}
-                  />
-                </PieChart>
+                <BarChart data={apptByAgent} layout="vertical" margin={{ left: 80 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} />
+                  <YAxis dataKey="name" type="category" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} width={100} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                  <Bar dataKey="count" fill="#10b981" radius={[0, 4, 4, 0]} />
+                </BarChart>
               </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Agent session time */}
+        <Card>
+          <CardHeader><CardTitle className="text-lg">Agent session time</CardTitle></CardHeader>
+          <CardContent>
+            {loading ? (
+              <Skeleton className="h-[280px] w-full" />
+            ) : agentSessions.length === 0 ? (
+              <EmptyState icon={Users} title="No active sessions in range" />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Agent</TableHead>
+                    <TableHead className="text-right">Active time</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {agentSessions.map((a) => (
+                    <TableRow key={a.agent}>
+                      <TableCell className="font-medium">{a.agent}</TableCell>
+                      <TableCell className="text-right">{fmtDuration(a.seconds)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Agent Performance Table */}
+      {/* Per-agent ROI table */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Agent Performance</CardTitle>
+          <CardTitle className="text-lg flex items-center justify-between">
+            <span>Agent ROI breakdown</span>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {agentPerf.length === 0 ? (
-            <p className="text-muted-foreground text-sm text-center py-8">No agent data yet.</p>
+          {loading ? (
+            <Skeleton className="h-[200px] w-full" />
+          ) : agentTable.length === 0 ? (
+            <EmptyState icon={Users} title="No agent activity in range" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left py-3 px-2 text-muted-foreground font-medium">Agent</th>
-                    <th className="text-right py-3 px-2 text-muted-foreground font-medium">Calls</th>
-                    <th className="text-right py-3 px-2 text-muted-foreground font-medium">Avg Duration</th>
-                    <th className="text-right py-3 px-2 text-muted-foreground font-medium">Appointments</th>
-                    <th className="text-right py-3 px-2 text-muted-foreground font-medium">Conv. Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {agentPerf.map((agent, i) => (
-                    <tr key={i} className="border-b border-border/50">
-                      <td className="py-3 px-2 font-medium text-foreground">{agent.agent}</td>
-                      <td className="py-3 px-2 text-right text-foreground">{agent.calls}</td>
-                      <td className="py-3 px-2 text-right text-muted-foreground">
-                        {Math.floor(agent.avgDuration / 60)}m {agent.avgDuration % 60}s
-                      </td>
-                      <td className="py-3 px-2 text-right">
-                        <Badge variant="outline" className="text-green-400 border-green-400/20">
-                          {agent.appointments}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-2 text-right text-foreground">
-                        {agent.calls > 0 ? ((agent.appointments / agent.calls) * 100).toFixed(1) : "0"}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Agent</TableHead>
+                  <TableHead className="text-right">Attempts</TableHead>
+                  <TableHead className="text-right">Connects</TableHead>
+                  <TableHead className="text-right">Connect %</TableHead>
+                  <TableHead className="text-right">Appts</TableHead>
+                  <TableHead className="text-right">Booking %</TableHead>
+                  <TableHead className="text-right">Talk time</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {agentTable.map((a) => (
+                  <TableRow key={a.agent}>
+                    <TableCell className="font-medium">{a.agent}</TableCell>
+                    <TableCell className="text-right">{a.attempts}</TableCell>
+                    <TableCell className="text-right">{a.connects}</TableCell>
+                    <TableCell className="text-right">{a.connectRate.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="outline" className="text-green-500 border-green-500/30">{a.appts}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{a.bookingRate.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right">{fmtDuration(a.talkTime)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

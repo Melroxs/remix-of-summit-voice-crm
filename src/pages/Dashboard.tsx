@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Phone, Users, CalendarClock, Megaphone, TrendingUp, Clock, UserCheck, UserX, Coffee, Bath } from "lucide-react";
+import {
+  Phone, Users, CalendarClock, Megaphone, TrendingUp, Clock, UserCheck,
+  Target, Repeat, ShieldOff, Disc3, PhoneIncoming,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,6 +13,7 @@ import { format, isPast } from "date-fns";
 import { AgentStatusBadge } from "@/components/agents/AgentStatusSelector";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { AGENT_STATUS_OPTIONS, getStatusMeta } from "@/hooks/use-agent-status";
+import { StatCard } from "@/components/reports/StatCard";
 
 interface DashStats {
   totalContacts: number;
@@ -18,6 +22,12 @@ interface DashStats {
   callbacksDue: number;
   appointmentsThisWeek: number;
   avgTalkTime: number;
+  // Leadership KPIs
+  attempts7d: number;
+  connects7d: number;
+  appts7d: number;
+  dncCount: number;
+  recordingsAvailable7d: number;
 }
 
 interface RecentCall {
@@ -49,6 +59,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<DashStats>({
     totalContacts: 0, activeCampaigns: 0, callsToday: 0,
     callbacksDue: 0, appointmentsThisWeek: 0, avgTalkTime: 0,
+    attempts7d: 0, connects7d: 0, appts7d: 0, dncCount: 0, recordingsAvailable7d: 0,
   });
   const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
   const [upcomingCallbacks, setUpcomingCallbacks] = useState<UpcomingCallback[]>([]);
@@ -62,9 +73,16 @@ export default function Dashboard() {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayISO = today.toISOString();
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const sevenIso = sevenDaysAgo.toISOString();
         const agentFilter = isAgent && !isAdmin ? user.id : null;
 
-        const [contactsRes, campaignsRes, callsTodayRes, callbacksRes, appointmentsRes, recentCallsRes, upcomingCbRes] = await Promise.all([
+        const [
+          contactsRes, campaignsRes, callsTodayRes, callbacksRes, appointmentsRes,
+          recentCallsRes, upcomingCbRes,
+          calls7dRes, appts7dRes, dncRes,
+        ] = await Promise.all([
           supabase.from("contacts").select("id", { count: "exact", head: true }),
           supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "active"),
           (() => {
@@ -95,11 +113,27 @@ export default function Dashboard() {
             if (agentFilter) q = q.eq("agent_id", agentFilter);
             return q;
           })(),
+          (() => {
+            let q = supabase.from("call_attempts").select("id, outcome, call_recording_id").gte("created_at", sevenIso);
+            if (agentFilter) q = q.eq("agent_id", agentFilter);
+            return q;
+          })(),
+          (() => {
+            let q = supabase.from("appointments").select("id", { count: "exact", head: true }).gte("created_at", sevenIso);
+            if (agentFilter) q = q.eq("agent_id", agentFilter);
+            return q;
+          })(),
+          supabase.from("dnc_entries").select("id", { count: "exact", head: true }),
         ]);
 
         const callsData = callsTodayRes.data || [];
         const totalDuration = callsData.reduce((s, c) => s + (c.duration_seconds || 0), 0);
         const avgTalk = callsData.length > 0 ? Math.round(totalDuration / callsData.length) : 0;
+
+        const calls7d = calls7dRes.data || [];
+        const connectedSet = new Set(["connected", "appointment_booked", "callback_scheduled", "not_interested", "dnc_request", "already_customer", "wrong_number"]);
+        const connects7d = calls7d.filter((c: any) => connectedSet.has(c.outcome ?? "")).length;
+        const recordings7d = calls7d.filter((c: any) => c.call_recording_id).length;
 
         setStats({
           totalContacts: contactsRes.count ?? 0,
@@ -108,6 +142,11 @@ export default function Dashboard() {
           callbacksDue: callbacksRes.count ?? 0,
           appointmentsThisWeek: appointmentsRes.count ?? 0,
           avgTalkTime: avgTalk,
+          attempts7d: calls7d.length,
+          connects7d,
+          appts7d: appts7dRes.count ?? 0,
+          dncCount: dncRes.count ?? 0,
+          recordingsAvailable7d: recordings7d,
         });
 
         setRecentCalls((recentCallsRes.data || []).map((c: any) => ({
@@ -164,6 +203,10 @@ export default function Dashboard() {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  const connectRate7d = stats.attempts7d > 0 ? (stats.connects7d / stats.attempts7d) * 100 : 0;
+  const bookingRate7d = stats.connects7d > 0 ? (stats.appts7d / stats.connects7d) * 100 : 0;
+  const recordingRate7d = stats.attempts7d > 0 ? (stats.recordingsAvailable7d / stats.attempts7d) * 100 : 0;
+
   const statCards = [
     { label: "Total Contacts", value: stats.totalContacts.toLocaleString(), icon: Users, change: `${stats.callsToday} calls today`, link: "/contacts" },
     { label: "Active Campaigns", value: stats.activeCampaigns.toString(), icon: Megaphone, change: "running", link: "/campaigns" },
@@ -211,6 +254,24 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Leadership KPIs (last 7 days) — admin only */}
+      {isAdmin && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-foreground">Leadership KPIs</h2>
+            <span className="text-xs text-muted-foreground">Last 7 days</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <StatCard label="Dial attempts" value={stats.attempts7d.toLocaleString()} icon={Phone} accent="primary" />
+            <StatCard label="Connect rate" value={`${connectRate7d.toFixed(1)}%`} icon={PhoneIncoming} accent="success" hint={`${stats.connects7d} connects`} />
+            <StatCard label="Booking rate" value={`${bookingRate7d.toFixed(1)}%`} icon={Target} accent="success" hint="of connects" />
+            <StatCard label="Appointments" value={stats.appts7d.toLocaleString()} icon={CalendarClock} accent="success" />
+            <StatCard label="DNC entries" value={stats.dncCount.toLocaleString()} icon={ShieldOff} accent="destructive" hint="all-time" />
+            <StatCard label="Recordings avail." value={`${recordingRate7d.toFixed(0)}%`} icon={Disc3} hint={`${stats.recordingsAvailable7d}/${stats.attempts7d}`} />
+          </div>
+        </div>
+      )}
 
       {/* Agent Status Overview - Admin only */}
       {isAdmin && agents.length > 0 && (
