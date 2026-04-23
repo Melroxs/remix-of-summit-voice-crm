@@ -27,6 +27,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
 import summitLogo from "@/assets/summit-logo.webp";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2 } from "lucide-react";
 
 interface NavItem {
   to: string;
@@ -60,7 +62,7 @@ export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, profile } = useAuth();
+  const { role, profile, isAdmin, companies, activeCompanyId, setActiveCompanyId, company } = useAuth();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -93,6 +95,30 @@ export default function AppSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        {/* Company context */}
+        {!collapsed && (companies.length > 0) && (
+          <div className="mb-3 px-1">
+            {isAdmin && companies.length > 1 ? (
+              <Select value={activeCompanyId ?? undefined} onValueChange={setActiveCompanyId}>
+                <SelectTrigger className="h-9 bg-sidebar-accent/40 border-sidebar-border text-xs">
+                  <Building2 className="w-3.5 h-3.5 mr-1.5 shrink-0" />
+                  <SelectValue placeholder="Select company" />
+                </SelectTrigger>
+                <SelectContent>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : company ? (
+              <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-sidebar-accent/30 text-xs text-muted-foreground">
+                <Building2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">{company.name}</span>
+              </div>
+            ) : null}
+          </div>
+        )}
+
         {navItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (

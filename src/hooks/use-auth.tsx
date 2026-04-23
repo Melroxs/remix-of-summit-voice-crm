@@ -12,6 +12,12 @@ interface Profile {
   avatar_url: string | null;
   agent_status: string | null;
   is_active: boolean;
+  company_id: string | null;
+}
+
+interface Company {
+  id: string;
+  name: string;
 }
 
 interface AuthContextType {
@@ -24,6 +30,10 @@ interface AuthContextType {
   isAdmin: boolean;
   isAgent: boolean;
   isClient: boolean;
+  company: Company | null;
+  companies: Company[];
+  activeCompanyId: string | null;
+  setActiveCompanyId: (id: string) => void;
   hasRole: (role: AppRole) => boolean;
   refreshProfile: () => Promise<void>;
 }
@@ -38,6 +48,10 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isAgent: false,
   isClient: false,
+  company: null,
+  companies: [],
+  activeCompanyId: null,
+  setActiveCompanyId: () => {},
   hasRole: () => false,
   refreshProfile: async () => {},
 });
@@ -47,12 +61,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyIdState] = useState<string | null>(null);
 
   const fetchUserData = useCallback(async (userId: string) => {
     try {
-      const [profileRes, rolesRes] = await Promise.all([
+      const [profileRes, rolesRes, companiesRes] = await Promise.all([
         supabase.from("profiles").select("*").eq("user_id", userId).single(),
         supabase.from("user_roles").select("role").eq("user_id", userId),
+        supabase.from("companies").select("id, name").order("name"),
       ]);
 
       if (profileRes.data) {
@@ -71,6 +88,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (rolesRes.data) {
         setRoles(rolesRes.data.map((r) => r.role as AppRole));
       }
+
+      if (companiesRes.data) {
+        setCompanies(companiesRes.data as Company[]);
+      }
+
+      // Default active company = profile.company_id (or first available)
+      const profCompany = (profileRes.data as unknown as Profile | null)?.company_id ?? null;
+      const stored = typeof window !== "undefined" ? localStorage.getItem("activeCompanyId") : null;
+      const isAdmin = (rolesRes.data ?? []).some((r) => r.role === "admin");
+      const fallback = profCompany ?? companiesRes.data?.[0]?.id ?? null;
+      const next = isAdmin && stored && companiesRes.data?.some((c) => c.id === stored) ? stored : fallback;
+      setActiveCompanyIdState(next);
     } catch (err) {
       console.error("[Auth] Error fetching user data:", err);
     }
@@ -109,6 +138,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session, fetchUserData]);
 
+  const setActiveCompanyId = useCallback((id: string) => {
+    setActiveCompanyIdState(id);
+    if (typeof window !== "undefined") localStorage.setItem("activeCompanyId", id);
+  }, []);
+
   // Primary role = first in priority order: admin > manager > agent > client
   const rolePriority: AppRole[] = ["admin", "manager", "team_leader", "agent", "client"];
   const primaryRole = rolePriority.find((r) => roles.includes(r)) || null;
@@ -123,6 +157,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin: roles.includes("admin"),
     isAgent: roles.includes("agent"),
     isClient: roles.includes("client") && !roles.includes("admin") && !roles.includes("agent"),
+    company: companies.find((c) => c.id === activeCompanyId) ?? null,
+    companies,
+    activeCompanyId,
+    setActiveCompanyId,
     hasRole: (role: AppRole) => roles.includes(role),
     refreshProfile,
   };

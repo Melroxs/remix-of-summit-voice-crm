@@ -585,6 +585,7 @@ export type Database = {
       campaigns: {
         Row: {
           client_account_id: string | null
+          company_id: string | null
           created_at: string
           created_by: string | null
           dial_mode: string | null
@@ -605,6 +606,7 @@ export type Database = {
         }
         Insert: {
           client_account_id?: string | null
+          company_id?: string | null
           created_at?: string
           created_by?: string | null
           dial_mode?: string | null
@@ -625,6 +627,7 @@ export type Database = {
         }
         Update: {
           client_account_id?: string | null
+          company_id?: string | null
           created_at?: string
           created_by?: string | null
           dial_mode?: string | null
@@ -652,6 +655,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "campaigns_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigns_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "campaigns_telephony_provider_id_fkey"
             columns: ["telephony_provider_id"]
             isOneToOne: false
@@ -666,24 +690,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      client_accounts: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-        }
-        Relationships: []
       }
       client_users: {
         Row: {
@@ -712,7 +718,32 @@ export type Database = {
             referencedRelation: "client_accounts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "client_users_client_account_id_fkey"
+            columns: ["client_account_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      companies: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       contacts: {
         Row: {
@@ -966,6 +997,7 @@ export type Database = {
         Row: {
           agent_status: Database["public"]["Enums"]["agent_status"] | null
           avatar_url: string | null
+          company_id: string | null
           created_at: string
           deactivated_at: string | null
           deactivated_by: string | null
@@ -982,6 +1014,7 @@ export type Database = {
         Insert: {
           agent_status?: Database["public"]["Enums"]["agent_status"] | null
           avatar_url?: string | null
+          company_id?: string | null
           created_at?: string
           deactivated_at?: string | null
           deactivated_by?: string | null
@@ -998,6 +1031,7 @@ export type Database = {
         Update: {
           agent_status?: Database["public"]["Enums"]["agent_status"] | null
           avatar_url?: string | null
+          company_id?: string | null
           created_at?: string
           deactivated_at?: string | null
           deactivated_by?: string | null
@@ -1011,7 +1045,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       qa_scores: {
         Row: {
@@ -1253,6 +1302,24 @@ export type Database = {
       }
     }
     Views: {
+      client_accounts: {
+        Row: {
+          created_at: string | null
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
       client_contact_view: {
         Row: {
           address: string | null
@@ -1345,6 +1412,11 @@ export type Database = {
       }
     }
     Functions: {
+      contact_in_user_company: {
+        Args: { _contact_id: string }
+        Returns: boolean
+      }
+      current_company_id: { Args: never; Returns: string }
       get_user_client_account_ids: {
         Args: { _user_id: string }
         Returns: string[]
@@ -1360,6 +1432,7 @@ export type Database = {
         Args: { _campaign_id: string; _user_id: string }
         Returns: boolean
       }
+      is_same_company: { Args: { _company_id: string }; Returns: boolean }
       release_stale_dialing_locks: { Args: never; Returns: number }
     }
     Enums: {
