@@ -24,6 +24,7 @@ import ContactActivityTimeline from "@/components/dialer/ContactActivityTimeline
 import DispositionPanel from "@/components/dialer/DispositionPanel";
 import CallbackModal from "@/components/dialer/CallbackModal";
 import AppointmentModal from "@/components/dialer/AppointmentModal";
+import WrapUpModal from "@/components/dialer/WrapUpModal";
 import DialPad from "@/components/dialer/DialPad";
 import AudioControls from "@/components/dialer/AudioControls";
 import DtmfPad from "@/components/dialer/DtmfPad";
@@ -43,6 +44,8 @@ export default function Dialer() {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [pendingDisposition, setPendingDisposition] = useState<string | null>(null);
   const [callDuration, setCallDuration] = useState(0);
+  const [showWrapUp, setShowWrapUp] = useState(false);
+  const [lastCallAttemptId, setLastCallAttemptId] = useState<string | null>(null);
   const [campaignScripts, setCampaignScripts] = useState<{ id: string; title: string; body: string }[]>([]);
   const [scriptDrawerOpen, setScriptDrawerOpen] = useState(false);
 
