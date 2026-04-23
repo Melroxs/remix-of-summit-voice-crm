@@ -574,9 +574,31 @@ export default function Dialer() {
       )}
       {showAppointmentModal && currentLead && (
         <AppointmentModal contactId={currentLead.contact_id} contactName={`${currentLead.first_name} ${currentLead.last_name}`}
-          campaignId={campaignId} contactAddress={currentLead.address} contactCity={currentLead.city}
+          campaignId={campaignId} callAttemptId={lastCallAttemptId} contactAddress={currentLead.address} contactCity={currentLead.city}
           contactState={currentLead.state} contactZip={currentLead.zip_code}
           onClose={handleModalClose} onSaved={handleModalSaved} />
+      )}
+      {showWrapUp && currentLead && (
+        <WrapUpModal
+          open={showWrapUp}
+          contactId={currentLead.contact_id}
+          contactName={`${currentLead.first_name} ${currentLead.last_name}`}
+          contactAddress={currentLead.address}
+          contactCity={currentLead.city}
+          contactState={currentLead.state}
+          contactZip={currentLead.zip_code}
+          campaignId={campaignId}
+          callAttemptId={lastCallAttemptId}
+          callDuration={callDuration}
+          initialNotes={notes}
+          onClose={() => setShowWrapUp(false)}
+          onComplete={({ disposition, needsAppointmentModal, needsCallbackModal }) => {
+            setShowWrapUp(false);
+            if (needsAppointmentModal) { setPendingDisposition(disposition); setShowAppointmentModal(true); return; }
+            if (needsCallbackModal) { setPendingDisposition(disposition); setShowCallbackModal(true); return; }
+            handleDispose(disposition);
+          }}
+        />
       )}
     </div>
   );
