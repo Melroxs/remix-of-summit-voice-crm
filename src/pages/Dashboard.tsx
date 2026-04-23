@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Phone, Users, CalendarClock, Megaphone, TrendingUp, Clock, UserCheck, UserX, Coffee, Bath } from "lucide-react";
+import {
+  Phone, Users, CalendarClock, Megaphone, TrendingUp, Clock, UserCheck,
+  Target, Repeat, ShieldOff, Disc3, PhoneIncoming,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,6 +13,7 @@ import { format, isPast } from "date-fns";
 import { AgentStatusBadge } from "@/components/agents/AgentStatusSelector";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { AGENT_STATUS_OPTIONS, getStatusMeta } from "@/hooks/use-agent-status";
+import { StatCard } from "@/components/reports/StatCard";
 
 interface DashStats {
   totalContacts: number;
@@ -18,6 +22,12 @@ interface DashStats {
   callbacksDue: number;
   appointmentsThisWeek: number;
   avgTalkTime: number;
+  // Leadership KPIs
+  attempts7d: number;
+  connects7d: number;
+  appts7d: number;
+  dncCount: number;
+  recordingsAvailable7d: number;
 }
 
 interface RecentCall {
