@@ -18,6 +18,9 @@ import {
   Star,
   BarChart2,
   MessageSquare,
+  CalendarCheck,
+  ScrollText,
+  GraduationCap,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,7 +41,10 @@ const allNavItems: NavItem[] = [
   { to: "/imports", icon: Upload, label: "Imports", roles: ["admin"] },
   { to: "/campaigns", icon: Megaphone, label: "Campaigns", roles: ["admin"] },
   { to: "/dialer", icon: Phone, label: "Dialer", roles: ["admin", "agent"] },
+  { to: "/scripts", icon: ScrollText, label: "Scripts", roles: ["admin", "agent", "team_leader"] },
   { to: "/callbacks", icon: CalendarClock, label: "Callbacks", roles: ["admin", "agent"] },
+  { to: "/appointments", icon: CalendarCheck, label: "Appointments", roles: ["admin", "agent", "team_leader"] },
+  { to: "/training", icon: GraduationCap, label: "Training Hub", roles: ["admin", "agent", "team_leader"] },
   { to: "/recordings", icon: Disc3, label: "Recordings", roles: ["admin"] },
   { to: "/reports", icon: BarChart3, label: "Reports", roles: ["admin"] },
   { to: "/users", icon: UserCog, label: "Users", roles: ["admin"] },
