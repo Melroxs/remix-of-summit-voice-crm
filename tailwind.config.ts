@@ -15,6 +15,7 @@ export default {
     extend: {
       fontFamily: {
         sans: ['var(--font-sans)'],
+        display: ['var(--font-display)'],
         mono: ['var(--font-mono)'],
       },
       colors: {
@@ -43,6 +44,10 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -59,6 +64,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        /* Operational status tokens */
+        "status-queued":         "hsl(var(--status-queued))",
+        "status-calling":        "hsl(var(--status-calling))",
+        "status-connected":      "hsl(var(--status-connected))",
+        "status-callback":       "hsl(var(--status-callback))",
+        "status-booked":         "hsl(var(--status-booked))",
+        "status-dnc":            "hsl(var(--status-dnc))",
+        "status-wrong-number":   "hsl(var(--status-wrong-number))",
+        "status-voicemail":      "hsl(var(--status-voicemail))",
+        "status-no-answer":      "hsl(var(--status-no-answer))",
+        "status-not-interested": "hsl(var(--status-not-interested))",
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
