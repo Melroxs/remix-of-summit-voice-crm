@@ -1191,6 +1191,48 @@ export type Database = {
         }
         Relationships: []
       }
+      training_simulations: {
+        Row: {
+          agent_id: string
+          created_at: string
+          difficulty: string
+          duration_seconds: number | null
+          ended_at: string | null
+          feedback: string | null
+          id: string
+          scenario: string
+          score: number | null
+          status: string
+          transcript: Json
+        }
+        Insert: {
+          agent_id: string
+          created_at?: string
+          difficulty?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          feedback?: string | null
+          id?: string
+          scenario: string
+          score?: number | null
+          status?: string
+          transcript?: Json
+        }
+        Update: {
+          agent_id?: string
+          created_at?: string
+          difficulty?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          feedback?: string | null
+          id?: string
+          scenario?: string
+          score?: number | null
+          status?: string
+          transcript?: Json
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
