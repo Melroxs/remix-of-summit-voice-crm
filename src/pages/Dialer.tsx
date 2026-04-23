@@ -349,15 +349,15 @@ export default function Dialer() {
     <div className="animate-slide-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dialer</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="page-header-title">Dialer</h1>
+          <p className="page-header-subtitle">
             {campaignId ? "Dial through your campaign queue or manually" : "Select a campaign or dial manually"}
           </p>
         </div>
         <div className="flex items-center gap-3">
           {campaignId && (
             <Badge variant="outline" className={
-              isPowerMode ? "text-amber-400 border-amber-400/30" : "text-muted-foreground"
+              isPowerMode ? "text-warning border-warning/30" : "text-muted-foreground"
             }>
               {campaignDialMode === "power_dial" ? "⚡ Power Dial" : campaignDialMode === "auto_dial" ? "⚡ Auto Dial" : "📞 Click to Call"}
             </Badge>
@@ -384,9 +384,9 @@ export default function Dialer() {
           )}
           <AgentStatusSelector compact />
           <Badge variant="outline" className={
-            connectionState === "ready" ? "text-green-400 border-green-400/30" :
+            connectionState === "ready" ? "text-success border-success/30" :
             connectionState === "error" ? "text-destructive border-destructive/30" :
-            connectionState === "connecting" ? "text-amber-400 border-amber-400/30" :
+            connectionState === "connecting" ? "text-warning border-warning/30" :
             "text-muted-foreground"
           }>
             {connectionState === "ready" ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
