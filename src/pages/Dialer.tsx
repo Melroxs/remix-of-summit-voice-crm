@@ -109,7 +109,9 @@ export default function Dialer() {
             provider_used: "telnyx",
             dial_mode_used: "manual",
             notes: notes || null,
-          } as any).then(() => {});
+          } as any).select("id").single().then(({ data }) => {
+            if (data?.id) setLastCallAttemptId(data.id);
+          });
         });
         setManualCallActive(false);
         setManualDialedRaw("");
@@ -119,6 +121,11 @@ export default function Dialer() {
 
       if (user) updateStatus(user.id, "wrap_up").catch(() => {});
       refreshProfile();
+
+      // Open post-call wrap-up modal for queue calls (not manual)
+      if (currentLead && duration > 5) {
+        setShowWrapUp(true);
+      }
     },
     onError: (msg) => {
       toast({ title: "Call error", description: msg, variant: "destructive" });
