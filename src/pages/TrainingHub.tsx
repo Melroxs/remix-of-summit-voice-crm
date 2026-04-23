@@ -382,6 +382,35 @@ export default function TrainingHub() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">Call mode</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={mode === "voice" ? "default" : "outline"}
+                      onClick={() => setMode("voice")}
+                      disabled={!voiceSupported}
+                      className="justify-start"
+                    >
+                      <Mic className="w-4 h-4 mr-2" />
+                      Voice
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={mode === "text" ? "default" : "outline"}
+                      onClick={() => setMode("text")}
+                      className="justify-start"
+                    >
+                      <Keyboard className="w-4 h-4 mr-2" />
+                      Text
+                    </Button>
+                  </div>
+                  {!voiceSupported && (
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Voice mode needs Chrome or Edge. Text mode works everywhere.
+                    </p>
+                  )}
+                </div>
                 <Button className="w-full" size="lg" onClick={startCall}>
                   <Phone className="w-4 h-4 mr-2" /> Start Call
                 </Button>
