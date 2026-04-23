@@ -11,12 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Search, Plus, Users, ChevronLeft, ChevronRight, Megaphone, Trash2 } from "lucide-react";
+import { Search, Plus, Users, ChevronLeft, ChevronRight, Megaphone, Trash2, Lock, Filter } from "lucide-react";
 import { formatPhoneDisplay } from "@/lib/phone";
 import ContactModal from "@/components/contacts/ContactModal";
 import ContactProfileDrawer from "@/components/contacts/ContactProfileDrawer";
 import DeleteConfirmDialog from "@/components/contacts/DeleteConfirmDialog";
 import { toast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
 
 const PAGE_SIZE = 50;
 
@@ -30,6 +31,15 @@ export default function Contacts() {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [ownershipFilter, setOwnershipFilter] = useState<string>("all"); // all | locked | unlocked
+  const [agents, setAgents] = useState<Record<string, string>>({}); // user_id -> display_name
+
+  // Per-contact ops data (attempts, last_call, next_callback) keyed by contact_id
+  const [opsData, setOpsData] = useState<Record<string, { attempts: number; last_called_at: string | null; next_callback_at: string | null }>>({});
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -49,19 +59,83 @@ export default function Contacts() {
     let query = supabase.from("contacts").select("*").order("created_at", { ascending: false }).range(from, to);
 
     if (search) {
-      const filter = `first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_e164.ilike.%${search}%`;
+      const filter = `first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_e164.ilike.%${search}%,email.ilike.%${search}%`;
       query = query.or(filter);
       countQuery = countQuery.or(filter);
+    }
+    if (statusFilter !== "all") {
+      query = query.eq("lead_status", statusFilter as any);
+      countQuery = countQuery.eq("lead_status", statusFilter as any);
+    }
+    if (ownershipFilter === "locked") {
+      query = query.not("locked_to_agent_id", "is", null);
+      countQuery = countQuery.not("locked_to_agent_id", "is", null);
+    } else if (ownershipFilter === "unlocked") {
+      query = query.is("locked_to_agent_id", null);
+      countQuery = countQuery.is("locked_to_agent_id", null);
+    }
+    if (campaignFilter !== "all") {
+      const { data: links } = await supabase
+        .from("campaign_contacts")
+        .select("contact_id")
+        .eq("campaign_id", campaignFilter)
+        .limit(5000);
+      const ids = (links || []).map((l) => l.contact_id);
+      if (ids.length === 0) {
+        setContacts([]); setTotalCount(0); setLoading(false); return;
+      }
+      query = query.in("id", ids);
+      countQuery = countQuery.in("id", ids);
     }
 
     const [{ data }, { count }] = await Promise.all([query, countQuery]);
     setContacts(data || []);
     setTotalCount(count ?? 0);
+
+    // Fetch ops data for visible page
+    const visibleIds = (data || []).map((c) => c.id);
+    if (visibleIds.length > 0) {
+      const [ccRes, cbRes, agRes] = await Promise.all([
+        supabase.from("campaign_contacts")
+          .select("contact_id, attempts, last_called_at")
+          .in("contact_id", visibleIds),
+        supabase.from("callbacks")
+          .select("contact_id, callback_at")
+          .in("contact_id", visibleIds)
+          .eq("status", "pending")
+          .order("callback_at", { ascending: true }),
+        supabase.from("profiles")
+          .select("user_id, display_name")
+          .in("user_id", (data || []).map((c) => c.locked_to_agent_id).filter(Boolean) as string[]),
+      ]);
+
+      const ops: Record<string, { attempts: number; last_called_at: string | null; next_callback_at: string | null }> = {};
+      for (const row of ccRes.data || []) {
+        const existing = ops[row.contact_id];
+        ops[row.contact_id] = {
+          attempts: Math.max(existing?.attempts ?? 0, row.attempts ?? 0),
+          last_called_at: !existing?.last_called_at || (row.last_called_at && row.last_called_at > existing.last_called_at)
+            ? row.last_called_at : existing.last_called_at,
+          next_callback_at: existing?.next_callback_at ?? null,
+        };
+      }
+      for (const cb of cbRes.data || []) {
+        if (!ops[cb.contact_id]) ops[cb.contact_id] = { attempts: 0, last_called_at: null, next_callback_at: cb.callback_at };
+        else if (!ops[cb.contact_id].next_callback_at) ops[cb.contact_id].next_callback_at = cb.callback_at;
+      }
+      setOpsData(ops);
+
+      const agentMap: Record<string, string> = {};
+      for (const a of agRes.data || []) agentMap[a.user_id] = a.display_name || "Agent";
+      setAgents((prev) => ({ ...prev, ...agentMap }));
+    } else {
+      setOpsData({});
+    }
     setLoading(false);
-  }, [search, page]);
+  }, [search, page, statusFilter, campaignFilter, ownershipFilter]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
-  useEffect(() => { setPage(0); }, [search]);
+  useEffect(() => { setPage(0); }, [search, statusFilter, campaignFilter, ownershipFilter]);
 
   useEffect(() => {
     supabase.from("campaigns").select("id, name").order("name").then(({ data }) => setCampaigns(data || []));
