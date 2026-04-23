@@ -203,6 +203,10 @@ export default function Dashboard() {
 
   const formatDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  const connectRate7d = stats.attempts7d > 0 ? (stats.connects7d / stats.attempts7d) * 100 : 0;
+  const bookingRate7d = stats.connects7d > 0 ? (stats.appts7d / stats.connects7d) * 100 : 0;
+  const recordingRate7d = stats.attempts7d > 0 ? (stats.recordingsAvailable7d / stats.attempts7d) * 100 : 0;
+
   const statCards = [
     { label: "Total Contacts", value: stats.totalContacts.toLocaleString(), icon: Users, change: `${stats.callsToday} calls today`, link: "/contacts" },
     { label: "Active Campaigns", value: stats.activeCampaigns.toString(), icon: Megaphone, change: "running", link: "/campaigns" },
@@ -250,6 +254,24 @@ export default function Dashboard() {
           </Card>
         ))}
       </div>
+
+      {/* Leadership KPIs (last 7 days) — admin only */}
+      {isAdmin && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-foreground">Leadership KPIs</h2>
+            <span className="text-xs text-muted-foreground">Last 7 days</span>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <StatCard label="Dial attempts" value={stats.attempts7d.toLocaleString()} icon={Phone} accent="primary" />
+            <StatCard label="Connect rate" value={`${connectRate7d.toFixed(1)}%`} icon={PhoneIncoming} accent="success" hint={`${stats.connects7d} connects`} />
+            <StatCard label="Booking rate" value={`${bookingRate7d.toFixed(1)}%`} icon={Target} accent="success" hint="of connects" />
+            <StatCard label="Appointments" value={stats.appts7d.toLocaleString()} icon={CalendarClock} accent="success" />
+            <StatCard label="DNC entries" value={stats.dncCount.toLocaleString()} icon={ShieldOff} accent="destructive" hint="all-time" />
+            <StatCard label="Recordings avail." value={`${recordingRate7d.toFixed(0)}%`} icon={Disc3} hint={`${stats.recordingsAvailable7d}/${stats.attempts7d}`} />
+          </div>
+        </div>
+      )}
 
       {/* Agent Status Overview - Admin only */}
       {isAdmin && agents.length > 0 && (
