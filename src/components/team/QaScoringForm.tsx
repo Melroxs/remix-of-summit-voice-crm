@@ -41,7 +41,7 @@ export default function QaScoringForm({ callLogId, agentId, campaignId, onClose,
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("qa_scores").insert({
+    const { error } = await supabase.from("qa_reviews").insert({
       call_log_id: callLogId,
       agent_id: agentId,
       scored_by: user.id,

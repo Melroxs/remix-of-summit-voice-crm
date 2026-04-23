@@ -203,7 +203,7 @@ export async function processImport(
 
   // Update import job
   await supabase
-    .from("import_jobs")
+    .from("lead_imports")
     .update({
       status: result.failed > 0 && result.successful === 0 ? "failed" : "completed",
       processed_rows: rows.length,
@@ -220,7 +220,7 @@ export async function processImport(
       error_message: e.message,
       raw_payload: buildErrorMetadata(e.data),
     }));
-    await supabase.from("import_errors").insert(errorRows);
+    await supabase.from("lead_import_rows").insert(errorRows);
   }
 
   return result;

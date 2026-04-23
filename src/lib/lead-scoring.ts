@@ -26,7 +26,7 @@ export async function calculateLeadScore(
   // Fetch data in parallel
   const [callLogsRes, callbacksRes, appointmentsRes, contactRes] = await Promise.all([
     supabase
-      .from("call_logs")
+      .from("call_attempts")
       .select("disposition, duration_seconds, created_at")
       .eq("contact_id", contactId)
       .order("created_at", { ascending: false })

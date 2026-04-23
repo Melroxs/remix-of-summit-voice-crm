@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
 
       // Get the call log with provider info
       const { data: callLog, error: clErr } = await supabaseAdmin
-        .from("call_logs")
+        .from("call_attempts")
         .select("id, agent_id, contact_id, campaign_id, telnyx_call_id, provider_used, outbound_number_used, ended_at")
         .eq("id", call_log_id)
         .single();

@@ -34,7 +34,7 @@ export default function Recordings() {
     const fetchRecordings = async () => {
       setLoading(true);
       let query = supabase
-        .from("recordings")
+        .from("call_recordings")
         .select("id, duration_seconds, format, created_at, call_log_id, telnyx_recording_id, call_logs(disposition, campaign_id, contacts(first_name, last_name), campaigns(name))")
         .order("created_at", { ascending: false })
         .limit(100);

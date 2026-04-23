@@ -113,7 +113,7 @@ export default function Contacts() {
         await supabase.from("callbacks").delete().in("contact_id", batch);
         await supabase.from("appointments").delete().in("contact_id", batch);
         await supabase.from("campaign_contacts").delete().in("contact_id", batch);
-        await supabase.from("call_logs").update({ contact_id: null }).in("contact_id", batch);
+        await supabase.from("call_attempts").update({ contact_id: null }).in("contact_id", batch);
         const { count, error } = await supabase.from("contacts").delete({ count: "exact" }).in("id", batch);
         if (error) throw error;
         totalDeleted += count || 0;

@@ -92,7 +92,7 @@ export default function Dialer() {
         // Fire-and-forget manual call log
         supabase.auth.getSession().then(({ data: session }) => {
           const userId = session?.session?.user?.id;
-          supabase.from("call_logs").insert({
+          supabase.from("call_attempts").insert({
             agent_id: userId || null,
             campaign_id: campaignId,
             contact_id: manualMatchedContact?.contact_id || null,

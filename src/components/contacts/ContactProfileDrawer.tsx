@@ -36,7 +36,7 @@ export default function ContactProfileDrawer({ contactId, onClose, onDeleted, on
     await supabase.from("campaign_contacts").delete().eq("contact_id", contactId);
     await supabase.from("callbacks").delete().eq("contact_id", contactId);
     await supabase.from("appointments").delete().eq("contact_id", contactId);
-    await supabase.from("call_logs").update({ contact_id: null }).eq("contact_id", contactId);
+    await supabase.from("call_attempts").update({ contact_id: null }).eq("contact_id", contactId);
     const { error } = await supabase.from("contacts").delete().eq("id", contactId);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });

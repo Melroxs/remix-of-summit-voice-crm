@@ -310,7 +310,7 @@ export function useDialerQueue(campaignId: string | null) {
       const userId = session?.session?.user?.id;
 
       // 1. Create call log
-      const { data: callLogData } = await supabase.from("call_logs").insert({
+      const { data: callLogData } = await supabase.from("call_attempts").insert({
         contact_id: currentLead.contact_id,
         campaign_id: campaignId,
         agent_id: userId || null,

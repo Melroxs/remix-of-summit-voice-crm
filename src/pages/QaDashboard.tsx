@@ -41,7 +41,7 @@ export default function QaDashboard() {
   const fetchData = async () => {
     setLoading(true);
 
-    let query = supabase.from("qa_scores").select("id, call_log_id, agent_id, total_score, created_at, strengths, improvement_feedback, campaign_id");
+    let query = supabase.from("qa_reviews").select("id, call_log_id, agent_id, total_score, created_at, strengths, improvement_feedback, campaign_id");
     if (selectedCampaign !== "all") query = query.eq("campaign_id", selectedCampaign);
 
     const { data: scores } = await query.order("created_at", { ascending: false });

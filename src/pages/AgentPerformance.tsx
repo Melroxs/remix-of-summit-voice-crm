@@ -48,9 +48,9 @@ export default function AgentPerformance() {
 
       const [{ data: profiles }, { data: calls }, { data: appts }, { data: qaScores }] = await Promise.all([
         supabase.from("profiles").select("user_id, display_name, email").in("user_id", agentIds),
-        supabase.from("call_logs").select("agent_id, duration_seconds, disposition").gte("created_at", since.toISOString()).in("agent_id", agentIds),
+        supabase.from("call_attempts").select("agent_id, duration_seconds, disposition").gte("created_at", since.toISOString()).in("agent_id", agentIds),
         supabase.from("appointments").select("agent_id").gte("created_at", since.toISOString()).in("agent_id", agentIds),
-        supabase.from("qa_scores").select("agent_id, total_score").gte("created_at", since.toISOString()).in("agent_id", agentIds),
+        supabase.from("qa_reviews").select("agent_id, total_score").gte("created_at", since.toISOString()).in("agent_id", agentIds),
       ]);
 
       const profileMap: Record<string, string> = {};

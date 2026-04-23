@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
 
     // Fetch the import job
     const { data: job, error: jobErr } = await adminClient
-      .from("import_jobs")
+      .from("lead_imports")
       .select("id, filename, total_rows, successful_rows")
       .eq("id", import_job_id)
       .maybeSingle();
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         await adminClient.from("campaign_contacts").delete().in("contact_id", batch);
 
         // Nullify contact_id on call_logs (preserve history but unlink)
-        await adminClient.from("call_logs").update({ contact_id: null }).in("contact_id", batch);
+        await adminClient.from("call_attempts").update({ contact_id: null }).in("contact_id", batch);
 
         // Delete the contacts themselves
         const { count } = await adminClient
@@ -103,10 +103,10 @@ Deno.serve(async (req) => {
     }
 
     // Delete import errors
-    await adminClient.from("import_errors").delete().eq("import_job_id", import_job_id);
+    await adminClient.from("lead_import_rows").delete().eq("import_job_id", import_job_id);
 
     // Delete the import job itself
-    await adminClient.from("import_jobs").delete().eq("id", import_job_id);
+    await adminClient.from("lead_imports").delete().eq("id", import_job_id);
 
     // Audit log
     await adminClient.from("admin_audit_log").insert({

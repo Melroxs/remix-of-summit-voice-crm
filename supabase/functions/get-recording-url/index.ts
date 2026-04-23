@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
 
     // Use the caller's client to respect RLS - only returns if user has access
     const { data: recording, error } = await callerClient
-      .from("recordings")
+      .from("call_recordings")
       .select("recording_url, telnyx_recording_id")
       .eq("id", recording_id)
       .maybeSingle();

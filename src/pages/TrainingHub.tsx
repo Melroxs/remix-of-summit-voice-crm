@@ -106,7 +106,7 @@ export default function TrainingHub() {
   async function loadHistory() {
     if (!user) return;
     const { data } = await supabase
-      .from("training_simulations")
+      .from("training_assets")
       .select("*")
       .eq("agent_id", user.id)
       .order("created_at", { ascending: false })
@@ -117,7 +117,7 @@ export default function TrainingHub() {
   async function startCall() {
     if (!user) return;
     const { data, error } = await supabase
-      .from("training_simulations")
+      .from("training_assets")
       .insert({
         agent_id: user.id,
         scenario,
@@ -188,7 +188,7 @@ export default function TrainingHub() {
       const updated: Msg[] = [...next, { role: "assistant", content: reply }];
       setTranscript(updated);
       await supabase
-        .from("training_simulations")
+        .from("training_assets")
         .update({ transcript: updated as never })
         .eq("id", active);
 
@@ -301,7 +301,7 @@ export default function TrainingHub() {
 
       const feedbackText = `**Strengths**\n${data.strengths}\n\n**Improvements**\n${data.improvements}`;
       await supabase
-        .from("training_simulations")
+        .from("training_assets")
         .update({
           score: data.score,
           feedback: feedbackText,

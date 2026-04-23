@@ -37,7 +37,7 @@ export default function LiveCallsPanel({ campaignId }: Props) {
 
   const fetchLiveCalls = useCallback(async () => {
     let query = supabase
-      .from("call_logs")
+      .from("call_attempts")
       .select("id, agent_id, started_at, telnyx_call_id, campaign_id, provider_used, contacts(first_name, last_name), campaigns(name)")
       .is("ended_at", null)
       .not("started_at", "is", null)

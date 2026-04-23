@@ -70,7 +70,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
         { data: callbacks },
         { data: appointments },
       ] = await Promise.all([
-        supabase.from("call_logs").select("*").eq("contact_id", contactId)
+        supabase.from("call_attempts").select("*").eq("contact_id", contactId)
           .order("created_at", { ascending: false }).limit(50),
         supabase.from("callbacks").select("*").eq("contact_id", contactId)
           .order("callback_at", { ascending: false }).limit(30),
@@ -102,10 +102,10 @@ export default function ContactActivityTimeline({ contactId }: Props) {
           ? supabase.from("campaigns").select("id, name").in("id", Array.from(campaignIds))
           : { data: [] },
         logIds.length > 0
-          ? supabase.from("recordings").select("id, call_log_id, duration_seconds").in("call_log_id", logIds)
+          ? supabase.from("call_recordings").select("id, call_log_id, duration_seconds").in("call_log_id", logIds)
           : { data: [] },
         logIds.length > 0
-          ? supabase.from("ai_call_summaries").select("call_log_id, summary, next_action, sentiment, call_outcome_summary, generation_status, error_message").in("call_log_id", logIds)
+          ? supabase.from("ai_summaries").select("call_log_id, summary, next_action, sentiment, call_outcome_summary, generation_status, error_message").in("call_log_id", logIds)
           : { data: [] },
       ]);
 

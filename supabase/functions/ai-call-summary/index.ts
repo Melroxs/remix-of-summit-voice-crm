@@ -71,12 +71,12 @@ Deno.serve(async (req) => {
 
     // If regenerating, delete existing summary
     if (regenerate) {
-      await adminClient.from("ai_call_summaries").delete().eq("call_log_id", call_log_id);
+      await adminClient.from("ai_summaries").delete().eq("call_log_id", call_log_id);
     }
 
     // Check if summary already exists
     const { data: existing } = await adminClient
-      .from("ai_call_summaries")
+      .from("ai_summaries")
       .select("id")
       .eq("call_log_id", call_log_id)
       .maybeSingle();
@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
     // Fetch call log with related data
     const { data: callLog } = await adminClient
-      .from("call_logs")
+      .from("call_attempts")
       .select("*, contacts(first_name, last_name, owner_renter, credit_rating, home_value, household_income, cool_notes, city, state), campaigns(name)")
       .eq("id", call_log_id)
       .maybeSingle();
@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
       error_message: null,
     };
     const { data: pendingInsert, error: pendingErr } = await adminClient
-      .from("ai_call_summaries")
+      .from("ai_summaries")
       .insert(pendingRow)
       .select("id")
       .single();
@@ -181,7 +181,7 @@ For longer calls with notes, provide detailed actionable intelligence.`;
         console.error("AI gateway error:", status, errText);
 
         const errorMsg = status === 429 ? "Rate limit exceeded" : status === 402 ? "Credits exhausted" : `AI error (${status})`;
-        await adminClient.from("ai_call_summaries").update({
+        await adminClient.from("ai_summaries").update({
           generation_status: "failed",
           error_message: errorMsg,
         }).eq("id", summaryId);
@@ -220,7 +220,7 @@ For longer calls with notes, provide detailed actionable intelligence.`;
       }
 
       // Update the summary record
-      await adminClient.from("ai_call_summaries").update({
+      await adminClient.from("ai_summaries").update({
         summary: parsed.summary || "No summary generated",
         next_action: parsed.next_action || null,
         sentiment: parsed.sentiment || null,
@@ -233,7 +233,7 @@ For longer calls with notes, provide detailed actionable intelligence.`;
 
       // Fetch the completed record
       const { data: final } = await adminClient
-        .from("ai_call_summaries")
+        .from("ai_summaries")
         .select("*")
         .eq("id", summaryId)
         .single();
@@ -243,7 +243,7 @@ For longer calls with notes, provide detailed actionable intelligence.`;
       });
     } catch (aiErr: any) {
       console.error("AI call error:", aiErr);
-      await adminClient.from("ai_call_summaries").update({
+      await adminClient.from("ai_summaries").update({
         generation_status: "failed",
         error_message: aiErr.message || "Unknown AI error",
       }).eq("id", summaryId);

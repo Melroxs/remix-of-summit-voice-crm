@@ -52,7 +52,7 @@ export default function Reports() {
     const fetchData = async () => {
       setLoading(true);
       const [callsRes, campaignsRes, profilesRes] = await Promise.all([
-        supabase.from("call_logs").select("id, agent_id, campaign_id, disposition, duration_seconds, created_at").order("created_at", { ascending: true }),
+        supabase.from("call_attempts").select("id, agent_id, campaign_id, disposition, duration_seconds, created_at").order("created_at", { ascending: true }),
         supabase.from("campaigns").select("id, name").order("name"),
         supabase.from("profiles").select("user_id, display_name, email"),
       ]);

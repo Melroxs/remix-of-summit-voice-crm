@@ -44,8 +44,8 @@ export default function MyFeedback() {
     const fetch = async () => {
       setLoading(true);
       const [{ data: fb }, { data: qa }] = await Promise.all([
-        supabase.from("agent_feedback").select("*").eq("agent_id", user.id).order("created_at", { ascending: false }),
-        supabase.from("qa_scores").select("*").eq("agent_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("notes").select("*").eq("agent_id", user.id).order("created_at", { ascending: false }),
+        supabase.from("qa_reviews").select("*").eq("agent_id", user.id).order("created_at", { ascending: false }),
       ]);
 
       // Get feedback giver names
@@ -87,7 +87,7 @@ export default function MyFeedback() {
   }, [user]);
 
   const handleAcknowledge = async (id: string) => {
-    await supabase.from("agent_feedback").update({ acknowledged: true } as any).eq("id", id);
+    await supabase.from("notes").update({ acknowledged: true } as any).eq("id", id);
     setFeedback(prev => prev.map(f => f.id === id ? { ...f, acknowledged: true } : f));
     toast.success("Feedback acknowledged");
   };
