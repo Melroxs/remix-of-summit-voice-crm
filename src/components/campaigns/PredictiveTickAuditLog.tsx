@@ -369,6 +369,85 @@ export default function PredictiveTickAuditLog({
           </div>
         </ScrollArea>
       )}
+      <Sheet
+        open={selectedRow !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRow(null);
+        }}
+      >
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          {selectedRow && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> Predictive tick details
+                </SheetTitle>
+                <SheetDescription>
+                  {formatDateTime(selectedRow.occurred_at)} ·{" "}
+                  {selectedRow.actor_name || selectedRow.actor_id || "Unknown user"}
+                  {selectedRow.actor_role ? ` · ${selectedRow.actor_role}` : ""}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                    Metrics snapshot
+                  </h4>
+                  <dl className="rounded-md border border-border divide-y divide-border text-sm">
+                    {KNOWN_METRIC_FIELDS.map((f) => {
+                      const v = selectedRow.metadata?.[f.key];
+                      return (
+                        <div
+                          key={f.key}
+                          className="grid grid-cols-2 gap-2 px-3 py-2"
+                        >
+                          <dt className="text-muted-foreground">{f.label}</dt>
+                          <dd className="font-mono text-xs break-all">
+                            {renderFieldValue(v)}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                    {extraMetadataKeys.map((k) => (
+                      <div key={k} className="grid grid-cols-2 gap-2 px-3 py-2">
+                        <dt className="text-muted-foreground">{k}</dt>
+                        <dd className="font-mono text-xs break-all">
+                          {renderFieldValue(selectedRow.metadata?.[k])}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Raw JSON
+                    </h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyJson}
+                      className="h-7 text-xs"
+                    >
+                      {copied ? "Copied" : "Copy JSON"}
+                    </Button>
+                  </div>
+                  <pre className="rounded-md border border-border bg-muted/40 p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                    {JSON.stringify(selectedRow.metadata ?? {}, null, 2)}
+                  </pre>
+                </div>
+
+                <div className="text-[11px] text-muted-foreground">
+                  Event ID:{" "}
+                  <span className="font-mono break-all">{selectedRow.id}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 
