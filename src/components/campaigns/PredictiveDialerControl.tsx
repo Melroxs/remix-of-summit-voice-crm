@@ -55,6 +55,7 @@ const AUTO_TICK_ENABLED_KEY = "predictiveDialer.autoTick.enabled";
 const AUTO_TICK_INTERVAL_KEY = "predictiveDialer.autoTick.intervalSec";
 const AUTO_TICK_INTERVALS = [15, 30, 60, 120, 300] as const;
 const DEFAULT_AUTO_TICK_INTERVAL = 60; // seconds
+const MANUAL_TICK_COOLDOWN_SEC = 30;
 
 export default function PredictiveDialerControl({ campaignId, enabled = true }: Props) {
   const { toast } = useToast();
@@ -82,6 +83,7 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
   const [nextAutoTickAt, setNextAutoTickAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const inFlightRef = useRef(false);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
 
   const handleThresholdChange = (raw: string) => {
     const n = Math.max(0, Math.min(100, Number(raw) || 0));
@@ -124,6 +126,10 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
     setConfirmOpen(true);
   };
 
+  const cooldownRemaining =
+    cooldownUntil != null ? Math.max(0, Math.ceil((cooldownUntil - now) / 1000)) : 0;
+  const inCooldown = cooldownRemaining > 0;
+
   const performTick = async (auto: boolean) => {
     if (inFlightRef.current) return;
     if (!auto && !reasonValid) return;
@@ -160,6 +166,7 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
         });
         setConfirmOpen(false);
         setReason("");
+        setCooldownUntil(Date.now() + MANUAL_TICK_COOLDOWN_SEC * 1000);
       }
     } catch (e: any) {
       const msg =
@@ -198,12 +205,22 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoTickEnabled, autoTickInterval, enabled, campaignId]);
 
-  // Tick a 1s clock for the countdown display (only when scheduler is on)
+  // Tick a 1s clock for countdown displays (auto-tick scheduler and/or manual cooldown)
   useEffect(() => {
-    if (!autoTickEnabled || !enabled || nextAutoTickAt == null) return;
+    const needsClock =
+      (autoTickEnabled && enabled && nextAutoTickAt != null) ||
+      (cooldownUntil != null && cooldownUntil > Date.now());
+    if (!needsClock) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [autoTickEnabled, enabled, nextAutoTickAt]);
+  }, [autoTickEnabled, enabled, nextAutoTickAt, cooldownUntil]);
+
+  // Clear cooldown state once it elapses to avoid stale timers
+  useEffect(() => {
+    if (cooldownUntil != null && cooldownUntil <= now) {
+      setCooldownUntil(null);
+    }
+  }, [cooldownUntil, now]);
 
   const secondsUntilNext =
     autoTickEnabled && nextAutoTickAt != null
@@ -225,13 +242,17 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
         <CardTitle className="text-lg flex items-center gap-2">
           <Activity className="w-5 h-5" /> Predictive Dialer
         </CardTitle>
-        <Button size="sm" onClick={openConfirm} disabled={loading || !enabled}>
+        <Button size="sm" onClick={openConfirm} disabled={loading || !enabled || inCooldown}>
           {loading ? (
             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
           ) : (
             <RefreshCw className="w-4 h-4 mr-1" />
           )}
-          {metrics ? "Tick again" : "Tick engine"}
+          {inCooldown
+            ? `Wait ${cooldownRemaining}s`
+            : metrics
+            ? "Tick again"
+            : "Tick engine"}
         </Button>
       </CardHeader>
       <CardContent>
@@ -441,14 +462,14 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
                 e.preventDefault();
                 handleTick();
               }}
-              disabled={!reasonValid || loading}
+              disabled={!reasonValid || loading || inCooldown}
             >
               {loading ? (
                 <Loader2 className="w-4 h-4 mr-1 animate-spin" />
               ) : (
                 <RefreshCw className="w-4 h-4 mr-1" />
               )}
-              Confirm tick
+              {inCooldown ? `Wait ${cooldownRemaining}s` : "Confirm tick"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
