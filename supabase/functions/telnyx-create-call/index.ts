@@ -41,25 +41,40 @@ Deno.serve(async (req) => {
     const contactId: string | undefined = body.contact_id;
     const agentId: string = body.agent_id || callerId;
     let fromNumber: string | undefined = body.from_number;
+    const dryRun: boolean = body.dry_run === true;
+    const testPhoneE164: string | undefined = body.test_phone_e164;
 
-    if (!campaignId || !contactId) {
-      return json({ error: "campaign_id and contact_id required" }, 400);
+    if (!campaignId) {
+      return json({ error: "campaign_id required" }, 400);
+    }
+    if (!dryRun && !contactId) {
+      return json({ error: "contact_id required" }, 400);
     }
 
     const apiKey = Deno.env.get("TELNYX_API_KEY");
     const connectionId = Deno.env.get("TELNYX_OUTBOUND_VOICE_PROFILE_ID");
-    if (!apiKey || !connectionId) return json({ error: "Telnyx not configured" }, 503);
+    if (!dryRun && (!apiKey || !connectionId)) {
+      return json({ error: "Telnyx not configured" }, 503);
+    }
 
-    // Look up contact phone (E.164)
-    const { data: contact } = await admin
-      .from("contacts")
-      .select("id, phone_e164, state")
-      .eq("id", contactId)
-      .maybeSingle();
-    if (!contact?.phone_e164) return json({ error: "Contact has no phone" }, 400);
+    // Look up the destination phone (real contact OR a synthetic test number)
+    let toPhone: string | null = null;
+    let contact: { id: string; phone_e164: string | null; state?: string | null } | null = null;
+    if (contactId) {
+      const { data } = await admin
+        .from("contacts")
+        .select("id, phone_e164, state")
+        .eq("id", contactId)
+        .maybeSingle();
+      contact = data;
+      toPhone = data?.phone_e164 ?? null;
+    } else if (dryRun && testPhoneE164) {
+      toPhone = testPhoneE164;
+    }
+    if (!dryRun && !toPhone) return json({ error: "Contact has no phone" }, 400);
 
-    // Derive lead area code from contact phone (E.164: +1NPANXXXXXX)
-    const leadAreaCode = extractAreaCode(contact.phone_e164);
+    // Derive lead area code from destination phone (E.164: +1NPANXXXXXX)
+    const leadAreaCode = extractAreaCode(toPhone);
 
     // Pick caller ID:
     //   1. campaign pool → healthy number whose area_code matches the lead's area code (local presence)
@@ -105,7 +120,14 @@ Deno.serve(async (req) => {
 
       fromNumber = selectedCallerIdRow?.phone_e164;
     }
-    if (!fromNumber) return json({ error: "No caller ID available" }, 400);
+    if (!fromNumber) {
+      return json({
+        error: "No caller ID available",
+        dry_run: dryRun,
+        lead_area_code: leadAreaCode,
+        strategy: "no_match",
+      }, dryRun ? 200 : 400);
+    }
 
     // If a manual from_number was supplied, look up the caller_ids row so we can log it
     if (!selectedCallerIdRow) {
@@ -119,12 +141,46 @@ Deno.serve(async (req) => {
 
     console.log("[telnyx-create-call] caller-id selection", {
       campaign_id: campaignId,
-      contact_id: contactId,
+      contact_id: contactId ?? null,
       lead_area_code: leadAreaCode,
       selected_caller_id: selectedCallerIdRow?.id ?? null,
       from_number: fromNumber,
       strategy: selectionStrategy,
+      dry_run: dryRun,
     });
+
+    // ---------------- DRY RUN: stop here ----------------
+    if (dryRun) {
+      // Audit so admins can see verification attempts in the audit log
+      await admin.from("audit_events").insert({
+        actor_id: callerId,
+        actor_role: "system",
+        event_type: "caller_id_verified",
+        entity_type: "campaign",
+        entity_id: campaignId,
+        metadata: {
+          campaign_id: campaignId,
+          contact_id: contactId ?? null,
+          test_phone_e164: testPhoneE164 ?? null,
+          to_number: toPhone,
+          from_number: fromNumber,
+          caller_id: selectedCallerIdRow?.id ?? null,
+          caller_id_area_code: selectedCallerIdRow?.area_code ?? null,
+          lead_area_code: leadAreaCode,
+          strategy: selectionStrategy,
+        },
+      });
+      return json({
+        dry_run: true,
+        to: toPhone,
+        from: fromNumber,
+        caller_id: selectedCallerIdRow?.id ?? null,
+        caller_id_phone: selectedCallerIdRow?.phone_e164 ?? null,
+        caller_id_area_code: selectedCallerIdRow?.area_code ?? null,
+        caller_id_strategy: selectionStrategy,
+        lead_area_code: leadAreaCode,
+      });
+    }
 
     // Originate via Telnyx
     const webhookBase = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
@@ -136,7 +192,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         connection_id: connectionId,
-        to: contact.phone_e164,
+        to: toPhone,
         from: fromNumber,
         webhook_url: `${webhookBase}/functions/v1/telnyx-webhook`,
         record: "record-from-answer",
@@ -156,7 +212,7 @@ Deno.serve(async (req) => {
       .insert({
         agent_id: agentId,
         campaign_id: campaignId,
-        contact_id: contactId,
+        contact_id: contactId!,
         telnyx_call_id: callControlId,
         outbound_number_used: fromNumber,
         provider_used: "telnyx",
@@ -182,10 +238,10 @@ Deno.serve(async (req) => {
         entity_id: attempt.id,
         metadata: {
           campaign_id: campaignId,
-          contact_id: contactId,
+          contact_id: contactId ?? null,
           caller_id: selectedCallerIdRow.id,
           from_number: fromNumber,
-          to_number: contact.phone_e164,
+          to_number: toPhone,
           lead_area_code: leadAreaCode,
           caller_id_area_code: selectedCallerIdRow.area_code,
           strategy: selectionStrategy,
@@ -202,7 +258,7 @@ Deno.serve(async (req) => {
     return json({
       call_attempt_id: attempt.id,
       telnyx_call_control_id: callControlId,
-      to: contact.phone_e164,
+      to: toPhone,
       from: fromNumber,
       caller_id: selectedCallerIdRow?.id ?? null,
       caller_id_strategy: selectionStrategy,
