@@ -846,6 +846,7 @@ export type Database = {
           max_concurrent_agents: number | null
           min_wait_seconds: number | null
           name: string
+          pacing_ratio: number
           queue_strategy: string | null
           retry_delay_no_answer: number | null
           retry_delay_voicemail: number | null
@@ -867,6 +868,7 @@ export type Database = {
           max_concurrent_agents?: number | null
           min_wait_seconds?: number | null
           name: string
+          pacing_ratio?: number
           queue_strategy?: string | null
           retry_delay_no_answer?: number | null
           retry_delay_voicemail?: number | null
@@ -888,6 +890,7 @@ export type Database = {
           max_concurrent_agents?: number | null
           min_wait_seconds?: number | null
           name?: string
+          pacing_ratio?: number
           queue_strategy?: string | null
           retry_delay_no_answer?: number | null
           retry_delay_voicemail?: number | null
