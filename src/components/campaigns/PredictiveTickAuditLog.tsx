@@ -3,6 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -10,7 +20,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Activity, RefreshCw, User, History, Gauge, Phone, Users, TrendingDown, Loader2 } from "lucide-react";
+import { Activity, RefreshCw, User, History, Gauge, Phone, Users, TrendingDown, Loader2, Filter, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,6 +78,17 @@ export default function PredictiveTickAuditLog({
   const [selectedRow, setSelectedRow] = useState<TickRow | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Filters (server-side for date range + actor; client-side for low-connect)
+  const [dateFrom, setDateFrom] = useState<string>(""); // yyyy-MM-ddTHH:mm
+  const [dateTo, setDateTo] = useState<string>("");
+  const [actorFilter, setActorFilter] = useState<string>("all");
+  const [lowConnectOnly, setLowConnectOnly] = useState<boolean>(false);
+  // Cache of every actor we've ever seen for this campaign so the dropdown
+  // stays useful even when the current filter narrows results.
+  const [actorOptions, setActorOptions] = useState<
+    { id: string; name: string; role: string | null }[]
+  >([]);
+
   /**
    * Fetch one page of audit events. When `before` is set, returns only rows
    * older than that timestamp (used for "Load more"). Otherwise refreshes
@@ -85,6 +106,17 @@ export default function PredictiveTickAuditLog({
 
     if (before) {
       query = query.lt("occurred_at", before);
+    }
+    if (dateFrom) {
+      const iso = new Date(dateFrom).toISOString();
+      query = query.gte("occurred_at", iso);
+    }
+    if (dateTo) {
+      const iso = new Date(dateTo).toISOString();
+      query = query.lte("occurred_at", iso);
+    }
+    if (actorFilter !== "all") {
+      query = query.eq("actor_id", actorFilter);
     }
 
     const { data, error } = await query;
@@ -113,10 +145,29 @@ export default function PredictiveTickAuditLog({
       });
     }
 
-    return events.map((e) => ({
+    const enriched = events.map((e) => ({
       ...e,
       actor_name: e.actor_id ? nameMap.get(e.actor_id) || null : null,
     }));
+
+    // Merge into the actor options cache so the dropdown grows over time.
+    setActorOptions((prev) => {
+      const map = new Map(prev.map((a) => [a.id, a]));
+      for (const e of enriched) {
+        if (e.actor_id && !map.has(e.actor_id)) {
+          map.set(e.actor_id, {
+            id: e.actor_id,
+            name: e.actor_name || e.actor_id,
+            role: e.actor_role,
+          });
+        }
+      }
+      return Array.from(map.values()).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+    });
+
+    return enriched;
   };
 
   const load = async () => {
@@ -150,14 +201,36 @@ export default function PredictiveTickAuditLog({
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [campaignId]);
+  }, [campaignId, dateFrom, dateTo, actorFilter]);
+
+  const clearFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+    setActorFilter("all");
+    setLowConnectOnly(false);
+  };
+
+  const hasActiveFilters =
+    dateFrom !== "" || dateTo !== "" || actorFilter !== "all" || lowConnectOnly;
+
+  // Apply client-side "low connect" filter to the rows we've loaded.
+  const visibleRows = useMemo(() => {
+    if (!lowConnectOnly) return rows;
+    return rows.filter((r) => {
+      const m = r.metadata || {};
+      const threshold = Number(m.connect_threshold_pct);
+      const connectNum =
+        typeof m.connect_rate === "number" ? m.connect_rate * 100 : null;
+      return Number.isFinite(threshold) && connectNum != null && connectNum < threshold;
+    });
+  }, [rows, lowConnectOnly]);
 
   const summary = useMemo(() => {
-    if (rows.length === 0) return null;
-    const totalPlaced = rows.reduce((acc, r) => acc + (Number(r.metadata?.placed) || 0), 0);
-    const totalTarget = rows.reduce((acc, r) => acc + (Number(r.metadata?.target) || 0), 0);
-    return { totalPlaced, totalTarget, count: rows.length };
-  }, [rows]);
+    if (visibleRows.length === 0) return null;
+    const totalPlaced = visibleRows.reduce((acc, r) => acc + (Number(r.metadata?.placed) || 0), 0);
+    const totalTarget = visibleRows.reduce((acc, r) => acc + (Number(r.metadata?.target) || 0), 0);
+    return { totalPlaced, totalTarget, count: visibleRows.length };
+  }, [visibleRows]);
 
   // Canonical list of fields we record on each predictive tick. Keeps the
   // detail drawer consistent and makes missing/null fields explicit.
@@ -210,10 +283,87 @@ export default function PredictiveTickAuditLog({
 
   const body = (
     <>
+      {/* Filters */}
+      <div className="mb-3 rounded-md border border-border bg-muted/20 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Filter className="h-3.5 w-3.5" /> Filters
+          </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-7 text-xs"
+            >
+              <X className="h-3 w-3 mr-1" /> Clear
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="tick-from" className="text-xs">From</Label>
+            <Input
+              id="tick-from"
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="tick-to" className="text-xs">To</Label>
+            <Input
+              id="tick-to"
+              type="datetime-local"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Actor</Label>
+            <Select value={actorFilter} onValueChange={setActorFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Any actor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any actor</SelectItem>
+                {actorOptions.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                    {a.role ? ` (${a.role})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Connect rate</Label>
+            <div className="flex items-center gap-2 h-8">
+              <Switch
+                id="low-connect"
+                checked={lowConnectOnly}
+                onCheckedChange={setLowConnectOnly}
+              />
+              <Label
+                htmlFor="low-connect"
+                className="text-xs font-normal cursor-pointer flex items-center gap-1"
+              >
+                <TrendingDown className="h-3 w-3" /> Below threshold only
+              </Label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {summary && (
         <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3 flex-wrap">
           <span>
             <span className="font-medium text-foreground">{summary.count}</span> ticks
+            {lowConnectOnly && rows.length !== visibleRows.length && (
+              <span className="text-muted-foreground"> (of {rows.length} loaded)</span>
+            )}
           </span>
           <span>·</span>
           <span>
@@ -228,14 +378,16 @@ export default function PredictiveTickAuditLog({
         <p className="text-sm text-muted-foreground py-6 text-center">
           Loading tick history…
         </p>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          No predictive ticks recorded for this campaign yet.
+          {hasActiveFilters
+            ? "No ticks match the current filters."
+            : "No predictive ticks recorded for this campaign yet."}
         </p>
       ) : (
         <ScrollArea className="max-h-[60vh] pr-3">
           <ul className="space-y-2">
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const m = row.metadata || {};
               const placed = Number(m.placed) || 0;
               const target = Number(m.target) || 0;
