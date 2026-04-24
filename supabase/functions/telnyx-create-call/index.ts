@@ -59,21 +59,73 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!contact?.phone_e164) return json({ error: "Contact has no phone" }, 400);
 
-    // Pick caller ID: campaign pool → least-recently-used healthy number
+    // Derive lead area code from contact phone (E.164: +1NPANXXXXXX)
+    const leadAreaCode = extractAreaCode(contact.phone_e164);
+
+    // Pick caller ID:
+    //   1. campaign pool → healthy number whose area_code matches the lead's area code (local presence)
+    //   2. fallback → least-recently-used healthy number in the campaign pool
+    let selectionStrategy: "local_presence" | "rotation_fallback" | "manual_override" = "manual_override";
+    let selectedCallerIdRow: { id: string; phone_e164: string; area_code: string | null } | null = null;
+
     if (!fromNumber) {
       const { data: pool } = await admin
         .from("campaign_caller_ids")
-        .select("caller_id, caller_ids!inner(phone_e164, is_active, health_status, last_used_at)")
+        .select(
+          "caller_id, caller_ids!inner(id, phone_e164, area_code, is_active, health_status, last_used_at)",
+        )
         .eq("campaign_id", campaignId);
-      const candidates = (pool || [])
+
+      const healthy = (pool || [])
         .map((p: any) => p.caller_ids)
-        .filter((c: any) => c?.is_active && c?.health_status !== "blocked")
-        .sort((a: any, b: any) =>
+        .filter((c: any) => c?.is_active && c?.health_status !== "blocked");
+
+      // 1. Local presence: same area code as the lead
+      if (leadAreaCode) {
+        const localMatches = healthy
+          .filter((c: any) => c?.area_code === leadAreaCode)
+          .sort((a: any, b: any) =>
+            (a.last_used_at ?? "").localeCompare(b.last_used_at ?? ""),
+          );
+        if (localMatches[0]) {
+          selectedCallerIdRow = localMatches[0];
+          selectionStrategy = "local_presence";
+        }
+      }
+
+      // 2. Fallback: least-recently-used healthy number
+      if (!selectedCallerIdRow) {
+        const sorted = healthy.sort((a: any, b: any) =>
           (a.last_used_at ?? "").localeCompare(b.last_used_at ?? ""),
         );
-      fromNumber = candidates[0]?.phone_e164;
+        if (sorted[0]) {
+          selectedCallerIdRow = sorted[0];
+          selectionStrategy = "rotation_fallback";
+        }
+      }
+
+      fromNumber = selectedCallerIdRow?.phone_e164;
     }
     if (!fromNumber) return json({ error: "No caller ID available" }, 400);
+
+    // If a manual from_number was supplied, look up the caller_ids row so we can log it
+    if (!selectedCallerIdRow) {
+      const { data: row } = await admin
+        .from("caller_ids")
+        .select("id, phone_e164, area_code")
+        .eq("phone_e164", fromNumber)
+        .maybeSingle();
+      if (row) selectedCallerIdRow = row;
+    }
+
+    console.log("[telnyx-create-call] caller-id selection", {
+      campaign_id: campaignId,
+      contact_id: contactId,
+      lead_area_code: leadAreaCode,
+      selected_caller_id: selectedCallerIdRow?.id ?? null,
+      from_number: fromNumber,
+      strategy: selectionStrategy,
+    });
 
     // Originate via Telnyx
     const webhookBase = Deno.env.get("SUPABASE_URL")!.replace(/\/$/, "");
@@ -121,6 +173,27 @@ Deno.serve(async (req) => {
       return json({ error: insErr.message }, 500);
     }
 
+    // Audit which caller ID was selected and why
+    if (selectedCallerIdRow) {
+      await admin.from("audit_events").insert({
+        actor_id: callerId,
+        actor_role: "system",
+        event_type: "caller_id_selected",
+        entity_type: "call_attempt",
+        entity_id: attempt.id,
+        metadata: {
+          campaign_id: campaignId,
+          contact_id: contactId,
+          caller_id: selectedCallerIdRow.id,
+          from_number: fromNumber,
+          to_number: contact.phone_e164,
+          lead_area_code: leadAreaCode,
+          caller_id_area_code: selectedCallerIdRow.area_code,
+          strategy: selectionStrategy,
+        },
+      });
+    }
+
     // Mark caller_id as used
     await admin
       .from("caller_ids")
@@ -132,6 +205,9 @@ Deno.serve(async (req) => {
       telnyx_call_control_id: callControlId,
       to: contact.phone_e164,
       from: fromNumber,
+      caller_id: selectedCallerIdRow?.id ?? null,
+      caller_id_strategy: selectionStrategy,
+      lead_area_code: leadAreaCode,
     });
   } catch (e) {
     console.error("[telnyx-create-call] error:", e);
@@ -144,4 +220,14 @@ function json(payload: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+/**
+ * Extract the 3-digit NANP area code from an E.164 number.
+ * "+14807766403" → "480". Returns null for non-NANP or malformed input.
+ */
+function extractAreaCode(phoneE164: string | null | undefined): string | null {
+  if (!phoneE164) return null;
+  const m = phoneE164.match(/^\+1(\d{3})\d{7}$/);
+  return m ? m[1] : null;
 }
