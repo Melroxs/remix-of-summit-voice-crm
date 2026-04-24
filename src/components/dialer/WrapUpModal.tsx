@@ -10,6 +10,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { ClipboardCheck, Sparkles, Phone, CalendarCheck, Clock, X, Loader2 } from "lucide-react";
 import QualificationForm, { QualificationData, emptyQualification } from "./QualificationForm";
+import {
+  validateCompleteDialAttempt,
+  DialerValidationError,
+} from "@/lib/dialer-service";
 
 interface DispositionOption {
   code: string;
@@ -84,6 +88,29 @@ export default function WrapUpModal({
   const handleSave = async () => {
     if (!disposition) {
       toast({ title: "Select a disposition", variant: "destructive" });
+      return;
+    }
+    if (!callAttemptId) {
+      toast({
+        title: "Cannot save disposition",
+        description: "No active call attempt — the call may not have started yet.",
+        variant: "destructive",
+      });
+      return;
+    }
+    // Pre-validate against the dialer-service contract. Callback datetime is collected
+    // in the follow-up CallbackModal, so we skip that check here.
+    try {
+      if (disposition !== "callback") {
+        validateCompleteDialAttempt(callAttemptId, disposition, { notes });
+      } else {
+        // Just check call_attempt_id + notes shape; callback time handled downstream.
+        validateCompleteDialAttempt(callAttemptId, "connected", { notes });
+      }
+    } catch (err) {
+      const msg =
+        err instanceof DialerValidationError ? err.message : "Invalid disposition";
+      toast({ title: "Invalid disposition", description: msg, variant: "destructive" });
       return;
     }
     setSaving(true);

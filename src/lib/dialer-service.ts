@@ -30,8 +30,100 @@ export type Disposition =
   | "connected"
   | "already_customer";
 
+/** Canonical set of dispositions accepted by the server-side complete_dial_attempt RPC. */
+export const VALID_DISPOSITIONS: readonly Disposition[] = [
+  "appointment_booked",
+  "dnc",
+  "wrong_number",
+  "voicemail",
+  "no_answer",
+  "busy",
+  "not_interested",
+  "callback",
+  "connected",
+  "already_customer",
+] as const;
+
+/** Dispositions that require a callback timestamp. */
+const CALLBACK_REQUIRED: ReadonlySet<Disposition> = new Set(["callback"]);
+
+export class DialerValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DialerValidationError";
+  }
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function assertUuid(value: unknown, field: string): asserts value is string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new DialerValidationError(`${field} is required`);
+  }
+  if (!UUID_RE.test(value)) {
+    throw new DialerValidationError(`${field} is not a valid id`);
+  }
+}
+
+/**
+ * Validate inputs before completing a dial attempt.
+ * Throws DialerValidationError for any client-detectable problem so we never
+ * round-trip an invalid request to the server.
+ */
+export function validateCompleteDialAttempt(
+  callAttemptId: unknown,
+  disposition: unknown,
+  opts: { notes?: string; callbackAt?: Date } = {},
+): asserts disposition is Disposition {
+  assertUuid(callAttemptId, "call_attempt_id");
+
+  if (typeof disposition !== "string" || !disposition.trim()) {
+    throw new DialerValidationError("Disposition is required");
+  }
+  if (!VALID_DISPOSITIONS.includes(disposition as Disposition)) {
+    throw new DialerValidationError(`Invalid disposition: ${disposition}`);
+  }
+
+  if (CALLBACK_REQUIRED.has(disposition as Disposition)) {
+    if (!(opts.callbackAt instanceof Date) || isNaN(opts.callbackAt.getTime())) {
+      throw new DialerValidationError("Callback disposition requires a callback date/time");
+    }
+    if (opts.callbackAt.getTime() <= Date.now()) {
+      throw new DialerValidationError("Callback time must be in the future");
+    }
+  }
+
+  if (opts.notes !== undefined && typeof opts.notes !== "string") {
+    throw new DialerValidationError("Notes must be text");
+  }
+  if (typeof opts.notes === "string" && opts.notes.length > 5000) {
+    throw new DialerValidationError("Notes must be under 5000 characters");
+  }
+}
+
+/** Validate inputs before originating an outbound call. */
+export function validateCreateOutboundCall(args: {
+  campaignId: unknown;
+  contactId: unknown;
+  agentId?: unknown;
+  fromNumber?: unknown;
+}): void {
+  assertUuid(args.campaignId, "campaign_id");
+  assertUuid(args.contactId, "contact_id");
+  if (args.agentId !== undefined && args.agentId !== null) {
+    assertUuid(args.agentId, "agent_id");
+  }
+  if (args.fromNumber !== undefined && args.fromNumber !== null) {
+    if (typeof args.fromNumber !== "string" || !/^\+[1-9]\d{6,14}$/.test(args.fromNumber)) {
+      throw new DialerValidationError("from_number must be E.164 format");
+    }
+  }
+}
+
 /** Power dialer: pull the next eligible lead for the current agent on a campaign. */
 export async function getNextLead(campaignId: string): Promise<NextLead | null> {
+  assertUuid(campaignId, "campaign_id");
   const { data, error } = await supabase.functions.invoke("power-dialer-next", {
     body: { campaign_id: campaignId },
   });
@@ -45,6 +137,7 @@ export async function completeDialAttempt(
   disposition: Disposition,
   opts: { notes?: string; callbackAt?: Date } = {},
 ): Promise<void> {
+  validateCompleteDialAttempt(callAttemptId, disposition, opts);
   const { error } = await supabase.rpc("complete_dial_attempt", {
     _call_attempt_id: callAttemptId,
     _disposition: disposition,
@@ -61,6 +154,7 @@ export async function createOutboundCall(args: {
   agentId?: string;
   fromNumber?: string;
 }): Promise<{ call_attempt_id: string; telnyx_call_control_id: string; from: string; to: string }> {
+  validateCreateOutboundCall(args);
   const { data, error } = await supabase.functions.invoke("telnyx-create-call", {
     body: {
       campaign_id: args.campaignId,
@@ -75,6 +169,7 @@ export async function createOutboundCall(args: {
 
 /** Manually tick the predictive engine for a campaign. (Normally cron-driven.) */
 export async function tickPredictiveEngine(campaignId: string) {
+  assertUuid(campaignId, "campaign_id");
   const { data, error } = await supabase.functions.invoke("predictive-dialer-engine", {
     body: { campaign_id: campaignId },
   });
