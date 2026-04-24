@@ -45,6 +45,15 @@ export default function ContactModal({ onClose, onSaved }: Props) {
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const handlePhoneBlur = () => {
+    const trimmed = (form.phone_raw || "").trim();
+    if (!trimmed) return;
+    const n = normalizePhoneToE164(trimmed);
+    if (n.valid && form.phone_raw !== n.e164) {
+      setForm((f) => ({ ...f, phone_raw: n.e164 }));
+    }
+  };
+
   const phoneValidation = useMemo(() => {
     const trimmed = (form.phone_raw || "").trim();
     if (!trimmed) return { required: true, valid: false, error: "Phone number is required" };
