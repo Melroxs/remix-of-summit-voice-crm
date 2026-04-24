@@ -23,6 +23,9 @@ import {
   MicOff,
   Keyboard,
   Volume2,
+  BookOpen,
+  MessageSquareWarning,
+  Quote,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +44,27 @@ interface Simulation {
   duration_seconds: number | null;
 }
 
+interface CampaignOption {
+  id: string;
+  name: string;
+}
+
+interface TrainingMaterial {
+  id: string;
+  material_type:
+    | "script"
+    | "objection"
+    | "rebuttal"
+    | "talking_point"
+    | "qualification_question"
+    | "closing_line";
+  title: string;
+  content: string;
+  parent_id: string | null;
+  scenario: string | null;
+  sort_order: number;
+}
+
 const SCENARIOS: { value: string; label: string; description: string }[] = [
   { value: "cold_homeowner", label: "Cold Homeowner", description: "Skeptical, unsolicited call" },
   { value: "storm_damage", label: "Storm Damage", description: "Recent hailstorm in the area" },
@@ -55,6 +79,10 @@ export default function TrainingHub() {
 
   const [scenario, setScenario] = useState("cold_homeowner");
   const [difficulty, setDifficulty] = useState("medium");
+  const [campaignId, setCampaignId] = useState<string>("none");
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [materials, setMaterials] = useState<TrainingMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
   const [transcript, setTranscript] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [active, setActive] = useState<string | null>(null);
@@ -98,6 +126,51 @@ export default function TrainingHub() {
   useEffect(() => {
     if (user) loadHistory();
   }, [user]);
+
+  // Load the campaigns this user can see (RLS will filter).
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("campaigns")
+        .select("id, name")
+        .order("name", { ascending: true });
+      setCampaigns((data as CampaignOption[]) ?? []);
+    })();
+  }, [user]);
+
+  // Reload coaching materials whenever the campaign or scenario changes.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      setMaterialsLoading(true);
+      let q = supabase
+        .from("ai_training_materials")
+        .select("id, material_type, title, content, parent_id, scenario, sort_order")
+        .eq("is_active", true)
+        .order("material_type", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .limit(200);
+
+      if (campaignId !== "none") {
+        q = q.or(`campaign_id.eq.${campaignId},campaign_id.is.null`);
+      } else {
+        q = q.is("campaign_id", null);
+      }
+
+      const { data } = await q;
+      if (cancelled) return;
+      const filtered = (data as TrainingMaterial[] | null)?.filter(
+        (m) => !m.scenario || m.scenario === scenario,
+      );
+      setMaterials(filtered ?? []);
+      setMaterialsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, campaignId, scenario]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -180,7 +253,13 @@ export default function TrainingHub() {
 
     try {
       const { data, error } = await supabase.functions.invoke("training-simulation", {
-        body: { scenario, difficulty, transcript: next, mode: "reply" },
+        body: {
+          scenario,
+          difficulty,
+          transcript: next,
+          mode: "reply",
+          campaign_id: campaignId !== "none" ? campaignId : null,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -294,7 +373,13 @@ export default function TrainingHub() {
     const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
     try {
       const { data, error } = await supabase.functions.invoke("training-simulation", {
-        body: { scenario, difficulty, transcript: tx, mode: "score" },
+        body: {
+          scenario,
+          difficulty,
+          transcript: tx,
+          mode: "score",
+          campaign_id: campaignId !== "none" ? campaignId : null,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -368,6 +453,29 @@ export default function TrainingHub() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Campaign coaching library
+                  </label>
+                  <Select value={campaignId} onValueChange={setCampaignId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a campaign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        Generic — no campaign library
+                      </SelectItem>
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    The AI will pull approved scripts and objections from this campaign’s library when role-playing and scoring.
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm font-medium mb-2 block">Difficulty</label>
@@ -563,7 +671,8 @@ export default function TrainingHub() {
           )}
         </Card>
 
-        {/* History */}
+        {/* Sidebar: history + coaching library */}
+        <div className="space-y-4">
         <Card className="p-4 h-fit">
           <div className="flex items-center gap-2 mb-3">
             <History className="w-4 h-4 text-muted-foreground" />
@@ -605,6 +714,75 @@ export default function TrainingHub() {
             </div>
           )}
         </Card>
+
+        {/* Coaching library */}
+        <Card className="p-4 h-fit">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="w-4 h-4 text-muted-foreground" />
+            <h3 className="font-semibold text-sm">Coaching library</h3>
+            <Badge variant="outline" className="text-[10px] ml-auto">
+              {campaignId === "none"
+                ? "Generic"
+                : campaigns.find((c) => c.id === campaignId)?.name ?? "Campaign"}
+            </Badge>
+          </div>
+          {materialsLoading ? (
+            <p className="text-xs text-muted-foreground">Loading materials…</p>
+          ) : materials.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No materials yet. Admins can add scripts and objections in Campaign settings.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+              {(["script", "objection", "rebuttal", "talking_point", "qualification_question", "closing_line"] as const).map(
+                (type) => {
+                  const items = materials.filter((m) => m.material_type === type);
+                  if (items.length === 0) return null;
+                  const labels: Record<string, string> = {
+                    script: "Scripts",
+                    objection: "Objections",
+                    rebuttal: "Rebuttals",
+                    talking_point: "Talking points",
+                    qualification_question: "Qualifying questions",
+                    closing_line: "Closing lines",
+                  };
+                  const Icon =
+                    type === "objection"
+                      ? MessageSquareWarning
+                      : type === "rebuttal" || type === "closing_line"
+                      ? Quote
+                      : BookOpen;
+                  return (
+                    <div key={type}>
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                        <Icon className="w-3 h-3" /> {labels[type]} ({items.length})
+                      </div>
+                      <ul className="space-y-1.5">
+                        {items.map((m) => (
+                          <li
+                            key={m.id}
+                            className="text-xs p-2 rounded-md border border-border bg-card"
+                          >
+                            <div className="font-medium">{m.title}</div>
+                            {m.content && (
+                              <div className="text-muted-foreground mt-0.5 line-clamp-3 whitespace-pre-wrap">
+                                {m.content}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
+            The AI prospect uses these objections when pushing back, and the coach scores you against these scripts.
+          </p>
+        </Card>
+        </div>
       </div>
     </div>
   );

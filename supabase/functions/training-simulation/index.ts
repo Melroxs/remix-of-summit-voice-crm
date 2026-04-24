@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,13 +26,93 @@ const DIFFICULTY_TUNING: Record<string, string> = {
   hard: "Be tough. Throw multiple objections, interrupt, and only book if the agent is clearly excellent.",
 };
 
+// Pull active training material for a campaign (or company-wide if no
+// campaign was supplied). Returns a compact text block that can be
+// injected into both the roleplay system prompt and the scoring prompt.
+async function loadCampaignTrainingContext(
+  campaignId: string | null | undefined,
+  scenario: string | null | undefined,
+): Promise<{ text: string; counts: Record<string, number> }> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!url || !key) return { text: "", counts: {} };
+    const supabase = createClient(url, key);
+
+    // We always read materials with no campaign filter when none provided
+    // (company-wide library) and otherwise scope to that campaign + any
+    // company-wide rows (campaign_id IS NULL).
+    let query = supabase
+      .from("ai_training_materials")
+      .select("material_type, title, content, parent_id, scenario, sort_order")
+      .eq("is_active", true)
+      .order("material_type", { ascending: true })
+      .order("sort_order", { ascending: true })
+      .limit(200);
+
+    if (campaignId) {
+      query = query.or(`campaign_id.eq.${campaignId},campaign_id.is.null`);
+    }
+
+    const { data, error } = await query;
+    if (error || !data) return { text: "", counts: {} };
+
+    // Optionally narrow objections/talking points to ones tagged with the
+    // current scenario, but always keep generic (untagged) ones.
+    const filtered = data.filter((row: any) => {
+      if (!scenario) return true;
+      if (!row.scenario) return true;
+      return row.scenario === scenario;
+    });
+
+    if (filtered.length === 0) return { text: "", counts: {} };
+
+    const groups: Record<string, { title: string; content: string }[]> = {};
+    for (const row of filtered as any[]) {
+      const k = row.material_type as string;
+      groups[k] ??= [];
+      groups[k].push({ title: row.title, content: row.content ?? "" });
+    }
+
+    const counts: Record<string, number> = {};
+    Object.keys(groups).forEach((k) => (counts[k] = groups[k].length));
+
+    const sectionLabels: Record<string, string> = {
+      script: "Approved scripts",
+      objection: "Common objections",
+      rebuttal: "Approved rebuttals",
+      talking_point: "Talking points",
+      qualification_question: "Qualification questions",
+      closing_line: "Closing lines",
+    };
+
+    const sections: string[] = [];
+    for (const [k, items] of Object.entries(groups)) {
+      const label = sectionLabels[k] ?? k;
+      const lines = items
+        .slice(0, 25)
+        .map(
+          (it) =>
+            `- ${it.title}${it.content ? `: ${it.content.replace(/\s+/g, " ").trim()}` : ""}`,
+        )
+        .join("\n");
+      sections.push(`${label}:\n${lines}`);
+    }
+
+    return { text: sections.join("\n\n"), counts };
+  } catch (e) {
+    console.error("loadCampaignTrainingContext failed", e);
+    return { text: "", counts: {} };
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { scenario, difficulty, transcript, mode } = await req.json();
+    const { scenario, difficulty, transcript, mode, campaign_id } = await req.json();
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
     if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
 
@@ -40,6 +121,9 @@ serve(async (req) => {
     const difficultyPrompt =
       DIFFICULTY_TUNING[difficulty] ?? DIFFICULTY_TUNING.medium;
 
+    const { text: trainingContext, counts: trainingCounts } =
+      await loadCampaignTrainingContext(campaign_id, scenario);
+
     // Mode "score" → analyze entire transcript and return score + feedback
     if (mode === "score") {
       const conversationText = (transcript ?? [])
@@ -47,6 +131,10 @@ serve(async (req) => {
           `${m.role === "user" ? "AGENT" : "PROSPECT"}: ${m.content}`
         )
         .join("\n");
+
+      const coachingBlock = trainingContext
+        ? `\n\nUse this team coaching library to judge whether the agent stuck to approved talk tracks and handled objections correctly. Reward use of these scripts/rebuttals; flag deviations:\n\n${trainingContext}`
+        : "";
 
       const scoreResp = await fetch(
         "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -62,7 +150,7 @@ serve(async (req) => {
               {
                 role: "system",
                 content:
-                  "You are a sales coach for a roofing appointment-setting team. Score the agent on a 0-100 scale and give concise actionable feedback.",
+                  `You are a sales coach for a roofing appointment-setting team. Score the agent on a 0-100 scale and give concise actionable feedback.${coachingBlock}`,
               },
               {
                 role: "user",
@@ -106,13 +194,20 @@ serve(async (req) => {
       const args =
         data.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
       const parsed = args ? JSON.parse(args) : null;
-      return new Response(JSON.stringify(parsed ?? { score: 0, strengths: "", improvements: "", booked_appointment: false }), {
+      return new Response(JSON.stringify({
+        ...(parsed ?? { score: 0, strengths: "", improvements: "", booked_appointment: false }),
+        training_materials_used: trainingCounts,
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     // Default mode → roleplay reply
-    const systemPrompt = `${scenarioPrompt}\n\n${difficultyPrompt}\n\nRules:\n- Stay in character as the prospect.\n- Keep replies short (1-3 sentences) like real phone conversation.\n- Never break character or mention you are AI.\n- If the agent successfully books an inspection, end your reply with the exact tag [APPOINTMENT_BOOKED].`;
+    const objectionsHint = trainingContext
+      ? `\n\nThe team has the following coaching library. Pull realistic objections from this list when pushing back, and only soften when the agent uses the matching rebuttal or qualifying question:\n\n${trainingContext}`
+      : "";
+
+    const systemPrompt = `${scenarioPrompt}\n\n${difficultyPrompt}\n\nRules:\n- Stay in character as the prospect.\n- Keep replies short (1-3 sentences) like real phone conversation.\n- Never break character or mention you are AI.\n- If the agent successfully books an inspection, end your reply with the exact tag [APPOINTMENT_BOOKED].${objectionsHint}`;
 
     const resp = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
@@ -154,7 +249,7 @@ serve(async (req) => {
 
     const data = await resp.json();
     const reply = data.choices?.[0]?.message?.content ?? "";
-    return new Response(JSON.stringify({ reply }), {
+    return new Response(JSON.stringify({ reply, training_materials_used: trainingCounts }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
