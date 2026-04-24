@@ -180,5 +180,7 @@ export async function tickPredictiveEngine(campaignId: string) {
     available_agents: number;
     active_calls: number;
     pacing_ratio: number;
+    connect_rate?: number;
+    abandon_rate?: number;
   };
 }
