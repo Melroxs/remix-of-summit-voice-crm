@@ -166,7 +166,7 @@ export default function EditContactModal({ contact, onClose, onSaved }: Props) {
         </div>
         <div className="flex justify-end gap-3 mt-4">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button onClick={handleSave} disabled={loading || !phoneValidation.valid}>
             {loading ? "Saving..." : "Save Changes"}
           </Button>
         </div>
