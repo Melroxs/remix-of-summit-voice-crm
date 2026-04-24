@@ -16,11 +16,12 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         manualChunks: {
+          // Keep only chunks used on EVERY route (incl. /auth) so they cache well
+          // without bloating the critical path. Let Rollup auto-split everything
+          // else (recharts, supabase, radix-ui) so those bytes only ship with the
+          // routes that actually import them.
           'vendor-react': ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'react-router-dom'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-select', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tabs', '@radix-ui/react-tooltip'],
           'vendor-query': ['@tanstack/react-query'],
-          'vendor-charts': ['recharts'],
         },
       },
     },
