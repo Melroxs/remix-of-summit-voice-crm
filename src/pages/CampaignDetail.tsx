@@ -14,6 +14,7 @@ import { ArrowLeft, Users, Plus, Trash2, Play, Pause, Settings, FileText, Pencil
 import { toast } from "@/hooks/use-toast";
 import CampaignPhonePool from "@/components/campaigns/CampaignPhonePool";
 import { useCampaignPhones } from "@/hooks/use-campaign-phones";
+import PredictiveDialerControl from "@/components/campaigns/PredictiveDialerControl";
 
 interface CampaignScript {
   id: string;
@@ -311,6 +312,14 @@ export default function CampaignDetail() {
 
       {/* Phone Number Pool */}
       <CampaignPhonePool campaignId={id!} phones={phones} onRefresh={fetchPhones} />
+
+      {/* Predictive dialer controls — shown only when campaign is in auto/predictive mode */}
+      {(campaign.dial_mode === "auto_dial" || campaign.dial_mode === "predictive") && (
+        <PredictiveDialerControl
+          campaignId={id!}
+          enabled={campaign.status === "active"}
+        />
+      )}
 
       {/* Scripts */}
       <Card>
