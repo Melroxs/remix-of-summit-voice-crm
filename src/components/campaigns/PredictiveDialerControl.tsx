@@ -1,10 +1,18 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Activity, Loader2, RefreshCw, Phone, Users, Gauge, AlertTriangle, TrendingDown } from "lucide-react";
+import { Activity, Loader2, RefreshCw, Phone, Users, Gauge, AlertTriangle, TrendingDown, Timer } from "lucide-react";
 import { tickPredictiveEngine, DialerValidationError } from "@/lib/dialer-service";
 import { logEvent } from "@/lib/audit";
 
@@ -43,6 +51,10 @@ interface Props {
  */
 const CONNECT_THRESHOLD_KEY = "predictiveDialer.connectThresholdPct";
 const DEFAULT_CONNECT_THRESHOLD = 25; // percent
+const AUTO_TICK_ENABLED_KEY = "predictiveDialer.autoTick.enabled";
+const AUTO_TICK_INTERVAL_KEY = "predictiveDialer.autoTick.intervalSec";
+const AUTO_TICK_INTERVALS = [15, 30, 60, 120, 300] as const;
+const DEFAULT_AUTO_TICK_INTERVAL = 60; // seconds
 
 export default function PredictiveDialerControl({ campaignId, enabled = true }: Props) {
   const { toast } = useToast();
@@ -56,12 +68,50 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
     const parsed = stored ? Number(stored) : NaN;
     return Number.isFinite(parsed) && parsed >= 0 && parsed <= 100 ? parsed : DEFAULT_CONNECT_THRESHOLD;
   });
+  const [autoTickEnabled, setAutoTickEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(AUTO_TICK_ENABLED_KEY) === "1";
+  });
+  const [autoTickInterval, setAutoTickInterval] = useState<number>(() => {
+    const stored = typeof window !== "undefined" ? localStorage.getItem(AUTO_TICK_INTERVAL_KEY) : null;
+    const parsed = stored ? Number(stored) : NaN;
+    return AUTO_TICK_INTERVALS.includes(parsed as typeof AUTO_TICK_INTERVALS[number])
+      ? parsed
+      : DEFAULT_AUTO_TICK_INTERVAL;
+  });
+  const [nextAutoTickAt, setNextAutoTickAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const inFlightRef = useRef(false);
 
   const handleThresholdChange = (raw: string) => {
     const n = Math.max(0, Math.min(100, Number(raw) || 0));
     setConnectThreshold(n);
     try {
       localStorage.setItem(CONNECT_THRESHOLD_KEY, String(n));
+    } catch {}
+  };
+
+  const handleAutoTickToggle = (next: boolean) => {
+    setAutoTickEnabled(next);
+    try {
+      localStorage.setItem(AUTO_TICK_ENABLED_KEY, next ? "1" : "0");
+    } catch {}
+    if (next) {
+      toast({
+        title: "Auto-tick enabled",
+        description: `Engine will tick every ${autoTickInterval}s while this campaign is active.`,
+      });
+    } else {
+      setNextAutoTickAt(null);
+    }
+  };
+
+  const handleAutoTickIntervalChange = (raw: string) => {
+    const n = Number(raw);
+    if (!AUTO_TICK_INTERVALS.includes(n as typeof AUTO_TICK_INTERVALS[number])) return;
+    setAutoTickInterval(n);
+    try {
+      localStorage.setItem(AUTO_TICK_INTERVAL_KEY, String(n));
     } catch {}
   };
 
@@ -74,10 +124,13 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
     setConfirmOpen(true);
   };
 
-  const handleTick = async () => {
-    if (!reasonValid) return;
+  const performTick = async (auto: boolean) => {
+    if (inFlightRef.current) return;
+    if (!auto && !reasonValid) return;
+    inFlightRef.current = true;
     setLoading(true);
     setError(null);
+    const tickReason = auto ? "auto-tick scheduler" : trimmedReason;
     try {
       const data = await tickPredictiveEngine(campaignId);
       setMetrics({ ...data, ticked_at: new Date().toISOString() });
@@ -86,7 +139,9 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
         entity_type: "campaign",
         entity_id: campaignId,
         metadata: {
-          reason: trimmedReason,
+          reason: tickReason,
+          source: auto ? "auto" : "manual",
+          auto_tick_interval_sec: auto ? autoTickInterval : null,
           placed: data.placed,
           target: data.target,
           available_agents: data.available_agents,
@@ -98,23 +153,62 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
           ticked_at: new Date().toISOString(),
         },
       }).catch(() => {});
-      toast({
-        title: "Predictive engine ticked",
-        description: `Placed ${data.placed} of ${data.target} target calls`,
-      });
-      setConfirmOpen(false);
-      setReason("");
+      if (!auto) {
+        toast({
+          title: "Predictive engine ticked",
+          description: `Placed ${data.placed} of ${data.target} target calls`,
+        });
+        setConfirmOpen(false);
+        setReason("");
+      }
     } catch (e: any) {
       const msg =
         e instanceof DialerValidationError
           ? e.message
           : e?.message || "Failed to tick predictive engine";
       setError(msg);
-      toast({ title: "Predictive tick failed", description: msg, variant: "destructive" });
+      toast({
+        title: auto ? "Auto-tick failed" : "Predictive tick failed",
+        description: msg,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
+      inFlightRef.current = false;
+      if (auto) {
+        setNextAutoTickAt(Date.now() + autoTickInterval * 1000);
+      }
     }
   };
+
+  const handleTick = () => performTick(false);
+
+  // Auto-tick scheduler
+  useEffect(() => {
+    if (!autoTickEnabled || !enabled) {
+      setNextAutoTickAt(null);
+      return;
+    }
+    // Schedule first run
+    setNextAutoTickAt((prev) => prev ?? Date.now() + autoTickInterval * 1000);
+    const id = window.setInterval(() => {
+      performTick(true);
+    }, autoTickInterval * 1000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoTickEnabled, autoTickInterval, enabled, campaignId]);
+
+  // Tick a 1s clock for the countdown display (only when scheduler is on)
+  useEffect(() => {
+    if (!autoTickEnabled || !enabled || nextAutoTickAt == null) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [autoTickEnabled, enabled, nextAutoTickAt]);
+
+  const secondsUntilNext =
+    autoTickEnabled && nextAutoTickAt != null
+      ? Math.max(0, Math.ceil((nextAutoTickAt - now) / 1000))
+      : null;
 
   const abandonPct =
     metrics?.abandon_rate != null ? (metrics.abandon_rate * 100).toFixed(1) : null;
@@ -146,6 +240,52 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
             Engine is disabled while the campaign is not active.
           </p>
         )}
+        <div className="flex flex-wrap items-center gap-3 mb-3 p-2 rounded-md border border-border/60 bg-muted/30">
+          <div className="flex items-center gap-2">
+            <Timer className="w-4 h-4 text-muted-foreground" />
+            <Label htmlFor="auto-tick" className="text-sm font-medium cursor-pointer">
+              Auto-tick
+            </Label>
+            <Switch
+              id="auto-tick"
+              checked={autoTickEnabled}
+              onCheckedChange={handleAutoTickToggle}
+              disabled={!enabled}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="auto-tick-interval" className="text-xs text-muted-foreground">
+              Every
+            </Label>
+            <Select
+              value={String(autoTickInterval)}
+              onValueChange={handleAutoTickIntervalChange}
+              disabled={!enabled}
+            >
+              <SelectTrigger id="auto-tick-interval" className="h-7 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUTO_TICK_INTERVALS.map((s) => (
+                  <SelectItem key={s} value={String(s)} className="text-xs">
+                    {s < 60 ? `${s}s` : `${s / 60} min`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {autoTickEnabled && enabled && (
+            <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1">
+              {loading ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" /> Ticking…
+                </>
+              ) : secondsUntilNext != null ? (
+                <>Next tick in {secondsUntilNext}s</>
+              ) : null}
+            </span>
+          )}
+        </div>
         {!metrics && !error && (
           <p className="text-sm text-muted-foreground">
             Click <span className="font-medium text-foreground">Tick engine</span> to manually
