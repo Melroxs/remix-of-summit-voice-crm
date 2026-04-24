@@ -167,7 +167,33 @@ Deno.serve(async (req) => {
 
     // Handle call events (for future use - storing telnyx_call_id)
     if (eventType === "call.initiated" || eventType === "call.answered" || eventType === "call.hangup") {
-      console.log("[telnyx-webhook] Call event:", eventType);
+      const payload = body?.data?.payload || body?.payload || {};
+      const telnyxCallId =
+        payload?.call_control_id || payload?.call_leg_id || payload?.call_session_id;
+
+      // Map Telnyx event_type -> internal call_event_type enum
+      const eventMap: Record<string, string> = {
+        "call.initiated": "initiated",
+        "call.answered": "answered",
+        "call.hangup": payload?.hangup_source === "callee" ? "hangup_remote" : "hangup_local",
+      };
+      const internalEvent = eventMap[eventType];
+
+      if (telnyxCallId && internalEvent) {
+        const { data, error } = await supabase.rpc("record_call_event", {
+          _telnyx_call_id: telnyxCallId,
+          _event_type: internalEvent,
+          _payload: payload,
+        });
+        if (error) {
+          console.error("[telnyx-webhook] record_call_event error:", error);
+        } else {
+          console.log("[telnyx-webhook] Recorded", internalEvent, "for call_attempt", data);
+        }
+      } else {
+        console.warn("[telnyx-webhook] Missing telnyx call id or unmapped event:", eventType);
+      }
+
       return new Response(JSON.stringify({ ok: true, event: eventType }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
