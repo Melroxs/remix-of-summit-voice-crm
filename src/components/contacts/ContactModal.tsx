@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizePhoneToE164 } from "@/lib/phone";
 import { contactSchema, firstZodMessage, flattenZodErrors } from "@/lib/validation";
@@ -116,7 +115,6 @@ export default function ContactModal({ onClose, onSaved }: Props) {
             <Input value={form.title} onChange={(e) => update("title", e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Phone</Label>
             <Label>Phone *</Label>
             <Input
               value={form.phone_raw}
