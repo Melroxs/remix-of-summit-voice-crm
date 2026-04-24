@@ -32,10 +32,9 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(token);
-    if (claimsErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
-    const callerId = claims.claims.sub as string;
+    const { data: userData, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !userData?.user) return json({ error: "Unauthorized" }, 401);
+    const callerId = userData.user.id;
 
     const body = await req.json().catch(() => ({}));
     const campaignId: string | undefined = body.campaign_id;
