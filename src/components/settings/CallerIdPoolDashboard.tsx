@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Phone, RefreshCw, Power, Search, Shield, ShieldAlert, ShieldOff, Snowflake, ThermometerSun } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,6 +55,7 @@ export default function CallerIdPoolDashboard() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
 
   const load = async () => {
     setLoading(true);
@@ -114,7 +116,20 @@ export default function CallerIdPoolDashboard() {
     setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, is_active: next } : r)));
   };
 
+  const campaignOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((r) => r.campaigns.forEach((c) => map.set(c.id, c.name)));
+    return Array.from(map, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    );
+  }, [rows]);
+
   const filtered = rows.filter((r) => {
+    if (campaignFilter === "unassigned") {
+      if (r.campaigns.length > 0) return false;
+    } else if (campaignFilter !== "all") {
+      if (!r.campaigns.some((c) => c.id === campaignFilter)) return false;
+    }
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -132,6 +147,20 @@ export default function CallerIdPoolDashboard() {
           <CardTitle className="text-lg">Caller ID Pool Health</CardTitle>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+            <SelectTrigger className="h-9 w-52 text-sm">
+              <SelectValue placeholder="Filter by campaign" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All campaigns</SelectItem>
+              <SelectItem value="unassigned">Unassigned</SelectItem>
+              {campaignOptions.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
