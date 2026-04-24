@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Phone, RefreshCw, Power, Search, Shield, ShieldAlert, ShieldOff, Snowflake, ThermometerSun } from "lucide-react";
@@ -56,6 +57,8 @@ export default function CallerIdPoolDashboard() {
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -116,6 +119,35 @@ export default function CallerIdPoolDashboard() {
     setRows((prev) => prev.map((r) => (r.id === row.id ? { ...r, is_active: next } : r)));
   };
 
+  const handleBulkSetActive = async (next: boolean) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+    const { error } = await supabase
+      .from("caller_ids")
+      .update({ is_active: next, updated_at: new Date().toISOString() })
+      .in("id", ids);
+    setBulkBusy(false);
+    if (error) {
+      toast({ title: "Bulk update failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({
+      title: next ? `Activated ${ids.length} number${ids.length === 1 ? "" : "s"}` : `Deactivated ${ids.length} number${ids.length === 1 ? "" : "s"}`,
+    });
+    ids.forEach((id) => {
+      const row = rows.find((r) => r.id === id);
+      logEvent({
+        type: next ? "caller_id.activated" : "caller_id.deactivated",
+        entity_type: "caller_id",
+        entity_id: id,
+        metadata: { phone_e164: row?.phone_e164, bulk: true },
+      }).catch(() => {});
+    });
+    setRows((prev) => prev.map((r) => (selectedIds.has(r.id) ? { ...r, is_active: next } : r)));
+    setSelectedIds(new Set());
+  };
+
   const campaignOptions = useMemo(() => {
     const map = new Map<string, string>();
     rows.forEach((r) => r.campaigns.forEach((c) => map.set(c.id, c.name)));
@@ -138,6 +170,29 @@ export default function CallerIdPoolDashboard() {
       r.campaigns.some((c) => c.name.toLowerCase().includes(q))
     );
   });
+
+  const visibleIds = filtered.map((r) => r.id);
+  const selectedVisibleCount = visibleIds.filter((id) => selectedIds.has(id)).length;
+  const allVisibleSelected = visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) visibleIds.forEach((id) => next.add(id));
+      else visibleIds.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+  const toggleOne = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
 
   return (
     <Card>
@@ -176,6 +231,41 @@ export default function CallerIdPoolDashboard() {
         </div>
       </CardHeader>
       <CardContent>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between gap-3 mb-3 p-2 px-3 rounded-md border border-border bg-muted/30">
+            <div className="text-sm">
+              <span className="font-medium">{selectedIds.size}</span> selected
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleBulkSetActive(true)}
+                disabled={bulkBusy}
+              >
+                <Power className="h-3.5 w-3.5 mr-1" />
+                Activate
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => handleBulkSetActive(false)}
+                disabled={bulkBusy}
+              >
+                <Power className="h-3.5 w-3.5 mr-1" />
+                Deactivate
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+                disabled={bulkBusy}
+              >
+                Clear
+              </Button>
+            </div>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <p className="text-muted-foreground text-sm">
             {loading ? "Loading numbers..." : "No caller IDs configured."}
@@ -184,6 +274,13 @@ export default function CallerIdPoolDashboard() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8">
+                  <Checkbox
+                    checked={allVisibleSelected || (someVisibleSelected ? "indeterminate" : false)}
+                    onCheckedChange={(v) => toggleAllVisible(!!v)}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead>Number</TableHead>
                 <TableHead>Campaigns</TableHead>
                 <TableHead>Status</TableHead>
@@ -203,6 +300,13 @@ export default function CallerIdPoolDashboard() {
                 const blocked = !r.is_active || r.health_status === "blocked";
                 return (
                   <TableRow key={r.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(r.id)}
+                        onCheckedChange={(v) => toggleOne(r.id, !!v)}
+                        aria-label={`Select ${r.phone_e164}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="font-mono text-sm">{formatPhoneDisplay(r.phone_e164)}</div>
                       {r.display_name && (
