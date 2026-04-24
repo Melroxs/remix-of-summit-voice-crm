@@ -671,7 +671,8 @@ export default function TrainingHub() {
           )}
         </Card>
 
-        {/* History */}
+        {/* Sidebar: history + coaching library */}
+        <div className="space-y-4">
         <Card className="p-4 h-fit">
           <div className="flex items-center gap-2 mb-3">
             <History className="w-4 h-4 text-muted-foreground" />
@@ -713,6 +714,75 @@ export default function TrainingHub() {
             </div>
           )}
         </Card>
+
+        {/* Coaching library */}
+        <Card className="p-4 h-fit">
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="w-4 h-4 text-muted-foreground" />
+            <h3 className="font-semibold text-sm">Coaching library</h3>
+            <Badge variant="outline" className="text-[10px] ml-auto">
+              {campaignId === "none"
+                ? "Generic"
+                : campaigns.find((c) => c.id === campaignId)?.name ?? "Campaign"}
+            </Badge>
+          </div>
+          {materialsLoading ? (
+            <p className="text-xs text-muted-foreground">Loading materials…</p>
+          ) : materials.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              No materials yet. Admins can add scripts and objections in Campaign settings.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+              {(["script", "objection", "rebuttal", "talking_point", "qualification_question", "closing_line"] as const).map(
+                (type) => {
+                  const items = materials.filter((m) => m.material_type === type);
+                  if (items.length === 0) return null;
+                  const labels: Record<string, string> = {
+                    script: "Scripts",
+                    objection: "Objections",
+                    rebuttal: "Rebuttals",
+                    talking_point: "Talking points",
+                    qualification_question: "Qualifying questions",
+                    closing_line: "Closing lines",
+                  };
+                  const Icon =
+                    type === "objection"
+                      ? MessageSquareWarning
+                      : type === "rebuttal" || type === "closing_line"
+                      ? Quote
+                      : BookOpen;
+                  return (
+                    <div key={type}>
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+                        <Icon className="w-3 h-3" /> {labels[type]} ({items.length})
+                      </div>
+                      <ul className="space-y-1.5">
+                        {items.map((m) => (
+                          <li
+                            key={m.id}
+                            className="text-xs p-2 rounded-md border border-border bg-card"
+                          >
+                            <div className="font-medium">{m.title}</div>
+                            {m.content && (
+                              <div className="text-muted-foreground mt-0.5 line-clamp-3 whitespace-pre-wrap">
+                                {m.content}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                },
+              )}
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
+            The AI prospect uses these objections when pushing back, and the coach scores you against these scripts.
+          </p>
+        </Card>
+        </div>
       </div>
     </div>
   );
