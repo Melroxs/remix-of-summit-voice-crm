@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { logEvent } from "@/lib/audit";
 import CallerIdAuditModal from "./CallerIdAuditModal";
+import CallerIdSparkline, { SparkPoint } from "./CallerIdSparkline";
 
 interface PoolRow {
   id: string;
@@ -61,6 +62,7 @@ export default function CallerIdPoolDashboard() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [auditTarget, setAuditTarget] = useState<PoolRow | null>(null);
+  const [sparkData, setSparkData] = useState<Record<string, SparkPoint[]>>({});
 
   const load = async () => {
     setLoading(true);
@@ -93,6 +95,63 @@ export default function CallerIdPoolDashboard() {
     }));
     setRows(mapped);
     setLoading(false);
+    loadSparklines(mapped.map((r) => r.phone_e164));
+  };
+
+  const loadSparklines = async (phones: string[]) => {
+    if (phones.length === 0) {
+      setSparkData({});
+      return;
+    }
+    const since = new Date(Date.now() - 7 * 24 * 3_600_000);
+    since.setUTCHours(0, 0, 0, 0);
+    const { data, error } = await supabase
+      .from("call_attempts")
+      .select("outbound_number_used, outcome, created_at")
+      .in("outbound_number_used", phones)
+      .gte("created_at", since.toISOString())
+      .limit(10000);
+    if (error) {
+      console.warn("[caller-id sparkline] failed:", error.message);
+      return;
+    }
+
+    // Build last 7 day buckets (oldest -> newest)
+    const days: { key: string; label: string }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      d.setUTCDate(d.getUTCDate() - i);
+      days.push({
+        key: d.toISOString().slice(0, 10),
+        label: d.toLocaleDateString(undefined, { weekday: "short" }),
+      });
+    }
+
+    const ANSWERED = new Set(["connected", "appointment_booked", "callback_scheduled"]);
+    const map: Record<string, SparkPoint[]> = {};
+    phones.forEach((p) => {
+      map[p] = days.map((d) => ({ day: d.label, total: 0, answered: 0, answer_rate: 0 }));
+    });
+
+    (data || []).forEach((row: any) => {
+      const phone: string | null = row.outbound_number_used;
+      if (!phone || !map[phone]) return;
+      const dayKey = (row.created_at as string).slice(0, 10);
+      const idx = days.findIndex((d) => d.key === dayKey);
+      if (idx === -1) return;
+      const point = map[phone][idx];
+      point.total += 1;
+      if (ANSWERED.has(row.outcome)) point.answered += 1;
+    });
+
+    Object.values(map).forEach((points) =>
+      points.forEach((p) => {
+        p.answer_rate = p.total > 0 ? Math.round((p.answered / p.total) * 100) : 0;
+      })
+    );
+
+    setSparkData(map);
   };
 
   useEffect(() => {
@@ -289,6 +348,7 @@ export default function CallerIdPoolDashboard() {
                 <TableHead>Last Used</TableHead>
                 <TableHead>Calls</TableHead>
                 <TableHead>Answer %</TableHead>
+                <TableHead>7-Day Trend</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -358,6 +418,9 @@ export default function CallerIdPoolDashboard() {
                     </TableCell>
                     <TableCell>{r.total_calls}</TableCell>
                     <TableCell>{answerRate}%</TableCell>
+                    <TableCell>
+                      <CallerIdSparkline data={sparkData[r.phone_e164] || []} mode="rate" />
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button
                         size="sm"
