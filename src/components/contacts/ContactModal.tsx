@@ -45,6 +45,15 @@ export default function ContactModal({ onClose, onSaved }: Props) {
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const handlePhoneBlur = () => {
+    const trimmed = (form.phone_raw || "").trim();
+    if (!trimmed) return;
+    const n = normalizePhoneToE164(trimmed);
+    if (n.valid && form.phone_raw !== n.e164) {
+      setForm((f) => ({ ...f, phone_raw: n.e164 }));
+    }
+  };
+
   const phoneValidation = useMemo(() => {
     const trimmed = (form.phone_raw || "").trim();
     if (!trimmed) return { required: true, valid: false, error: "Phone number is required" };
@@ -119,6 +128,7 @@ export default function ContactModal({ onClose, onSaved }: Props) {
             <Input
               value={form.phone_raw}
               onChange={(e) => update("phone_raw", e.target.value)}
+              onBlur={handlePhoneBlur}
               placeholder="(602) 555-1234"
               aria-invalid={!phoneValidation.valid}
               className={!phoneValidation.valid && form.phone_raw ? "border-destructive focus-visible:ring-destructive" : ""}
