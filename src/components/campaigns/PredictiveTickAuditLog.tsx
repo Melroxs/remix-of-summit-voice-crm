@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Activity, RefreshCw, User, History, Gauge, Phone, Users, TrendingDown } from "lucide-react";
+import { Activity, RefreshCw, User, History, Gauge, Phone, Users, TrendingDown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -56,10 +56,16 @@ export default function PredictiveTickAuditLog({
   const { toast } = useToast();
   const [rows, setRows] = useState<TickRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
+  /**
+   * Fetch one page of audit events. When `before` is set, returns only rows
+   * older than that timestamp (used for "Load more"). Otherwise refreshes
+   * the list from the most recent tick.
+   */
+  const fetchPage = async (before?: string): Promise<TickRow[] | null> => {
+    let query = supabase
       .from("audit_events")
       .select("id, occurred_at, actor_id, actor_role, metadata")
       .eq("event_type", "predictive_engine.ticked")
@@ -68,14 +74,18 @@ export default function PredictiveTickAuditLog({
       .order("occurred_at", { ascending: false })
       .limit(pageSize);
 
+    if (before) {
+      query = query.lt("occurred_at", before);
+    }
+
+    const { data, error } = await query;
     if (error) {
       toast({
         title: "Failed to load tick history",
         description: error.message,
         variant: "destructive",
       });
-      setLoading(false);
-      return;
+      return null;
     }
 
     const events = (data || []) as TickRow[];
@@ -94,13 +104,38 @@ export default function PredictiveTickAuditLog({
       });
     }
 
-    setRows(
-      events.map((e) => ({
-        ...e,
-        actor_name: e.actor_id ? nameMap.get(e.actor_id) || null : null,
-      })),
-    );
+    return events.map((e) => ({
+      ...e,
+      actor_name: e.actor_id ? nameMap.get(e.actor_id) || null : null,
+    }));
+  };
+
+  const load = async () => {
+    setLoading(true);
+    const page = await fetchPage();
+    if (page) {
+      setRows(page);
+      setHasMore(page.length === pageSize);
+    }
     setLoading(false);
+  };
+
+  const loadMore = async () => {
+    const oldest = rows[rows.length - 1]?.occurred_at;
+    if (!oldest || loadingMore) return;
+    setLoadingMore(true);
+    const page = await fetchPage(oldest);
+    if (page) {
+      // De-dupe by id in case of clock collisions on the boundary row
+      setRows((prev) => {
+        const seen = new Set(prev.map((r) => r.id));
+        const merged = [...prev];
+        for (const r of page) if (!seen.has(r.id)) merged.push(r);
+        return merged;
+      });
+      setHasMore(page.length === pageSize);
+    }
+    setLoadingMore(false);
   };
 
   useEffect(() => {
@@ -242,6 +277,28 @@ export default function PredictiveTickAuditLog({
               );
             })}
           </ul>
+          <div className="pt-3 pb-1 flex items-center justify-center">
+            {hasMore ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadMore}
+                disabled={loadingMore}
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading…
+                  </>
+                ) : (
+                  <>Load older ticks</>
+                )}
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                End of history — {rows.length} tick{rows.length === 1 ? "" : "s"} loaded
+              </span>
+            )}
+          </div>
         </ScrollArea>
       )}
     </>
