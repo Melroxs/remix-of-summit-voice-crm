@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatPhoneDisplay } from "@/lib/phone";
 import { logEvent } from "@/lib/audit";
+import CallerIdAuditModal from "./CallerIdAuditModal";
 
 interface PoolRow {
   id: string;
@@ -59,6 +60,7 @@ export default function CallerIdPoolDashboard() {
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [auditTarget, setAuditTarget] = useState<PoolRow | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -308,10 +310,19 @@ export default function CallerIdPoolDashboard() {
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="font-mono text-sm">{formatPhoneDisplay(r.phone_e164)}</div>
-                      {r.display_name && (
-                        <div className="text-xs text-muted-foreground">{r.display_name}</div>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setAuditTarget(r)}
+                        className="text-left hover:text-primary transition-colors group"
+                        title="View audit log"
+                      >
+                        <div className="font-mono text-sm group-hover:underline">
+                          {formatPhoneDisplay(r.phone_e164)}
+                        </div>
+                        {r.display_name && (
+                          <div className="text-xs text-muted-foreground">{r.display_name}</div>
+                        )}
+                      </button>
                     </TableCell>
                     <TableCell>
                       {r.campaigns.length === 0 ? (
@@ -365,6 +376,14 @@ export default function CallerIdPoolDashboard() {
           </Table>
         )}
       </CardContent>
+      {auditTarget && (
+        <CallerIdAuditModal
+          callerId={auditTarget.id}
+          phoneE164={auditTarget.phone_e164}
+          displayName={auditTarget.display_name}
+          onClose={() => setAuditTarget(null)}
+        />
+      )}
     </Card>
   );
 }
