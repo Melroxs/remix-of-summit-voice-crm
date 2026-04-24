@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizePhoneToE164 } from "@/lib/phone";
 import { contactSchema, firstZodMessage } from "@/lib/validation";
@@ -22,6 +22,7 @@ interface Props {
 export default function EditContactModal({ contact, onClose, onSaved }: Props) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
     first_name: contact.first_name || "",
     last_name: contact.last_name || "",
@@ -42,7 +43,21 @@ export default function EditContactModal({ contact, onClose, onSaved }: Props) {
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const phoneValidation = useMemo(() => {
+    const trimmed = (form.phone_raw || "").trim();
+    if (!trimmed) return { valid: false, error: "Phone number is required" };
+    const n = normalizePhoneToE164(trimmed);
+    return n.valid
+      ? { valid: true, error: "" }
+      : { valid: false, error: n.error || "Invalid phone number" };
+  }, [form.phone_raw]);
+
   const handleSave = async () => {
+    if (!phoneValidation.valid) {
+      setFieldErrors((prev) => ({ ...prev, phone_raw: phoneValidation.error }));
+      toast({ title: "Invalid phone number", description: phoneValidation.error, variant: "destructive" });
+      return;
+    }
     const parsed = contactSchema.safeParse(form);
     if (!parsed.success) {
       toast({ title: "Check the form", description: firstZodMessage(parsed.error), variant: "destructive" });
@@ -95,9 +110,18 @@ export default function EditContactModal({ contact, onClose, onSaved }: Props) {
             <Input value={form.title} onChange={(e) => update("title", e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Phone</Label>
-            <Input value={form.phone_raw} onChange={(e) => update("phone_raw", e.target.value)} placeholder="(602) 555-1234" />
+            <Label>Phone *</Label>
+            <Input
+              value={form.phone_raw}
+              onChange={(e) => update("phone_raw", e.target.value)}
+              placeholder="(602) 555-1234"
+              aria-invalid={!phoneValidation.valid}
+              className={!phoneValidation.valid && form.phone_raw ? "border-destructive focus-visible:ring-destructive" : ""}
+            />
             <PhoneE164Preview rawValue={form.phone_raw} />
+            {fieldErrors.phone_raw && (
+              <p className="text-xs text-destructive">{fieldErrors.phone_raw}</p>
+            )}
           </div>
           <div className="space-y-2 col-span-2">
             <Label>Address</Label>
