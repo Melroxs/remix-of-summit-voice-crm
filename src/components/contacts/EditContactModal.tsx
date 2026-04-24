@@ -11,6 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import PhoneE164Preview from "./PhoneE164Preview";
 
 interface Props {
   contact: any;
@@ -96,6 +97,7 @@ export default function EditContactModal({ contact, onClose, onSaved }: Props) {
           <div className="space-y-2">
             <Label>Phone</Label>
             <Input value={form.phone_raw} onChange={(e) => update("phone_raw", e.target.value)} placeholder="(602) 555-1234" />
+            <PhoneE164Preview rawValue={form.phone_raw} />
           </div>
           <div className="space-y-2 col-span-2">
             <Label>Address</Label>
