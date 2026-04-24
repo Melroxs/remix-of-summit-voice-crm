@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trash2, Phone } from "lucide-react";
+import { Plus, Trash2, Phone, ShieldCheck, MapPin, Shuffle, AlertCircle } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { CampaignPhoneNumber } from "@/hooks/use-campaign-phones";
 import { useAuth } from "@/hooks/use-auth";
@@ -27,6 +27,20 @@ export default function CampaignPhonePool({ campaignId, phones, onRefresh }: Pro
   const [existingCallerId, setExistingCallerId] = useState<string>("");
   const [companyCallerIds, setCompanyCallerIds] = useState<Array<{ id: string; phone_e164: string }>>([]);
   const { activeCompanyId } = useAuth();
+
+  // Verify caller ID (dry run)
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyPhone, setVerifyPhone] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<{
+    to: string | null;
+    from: string | null;
+    caller_id_phone: string | null;
+    caller_id_area_code: string | null;
+    caller_id_strategy: "local_presence" | "rotation_fallback" | "manual_override" | "no_match";
+    lead_area_code: string | null;
+    error?: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!dialogOpen || !activeCompanyId) return;
@@ -96,15 +110,60 @@ export default function CampaignPhonePool({ campaignId, phones, onRefresh }: Pro
     onRefresh();
   };
 
+  const handleVerify = async () => {
+    const trimmed = verifyPhone.trim();
+    if (!/^\+\d{8,15}$/.test(trimmed)) {
+      toast({ title: "Invalid phone", description: "Use E.164 format, e.g. +14805551234", variant: "destructive" });
+      return;
+    }
+    setVerifying(true);
+    setVerifyResult(null);
+    const { data, error } = await supabase.functions.invoke("telnyx-create-call", {
+      body: {
+        campaign_id: campaignId,
+        dry_run: true,
+        test_phone_e164: trimmed,
+      },
+    });
+    setVerifying(false);
+    if (error) {
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
+      setVerifyResult({
+        to: trimmed, from: null, caller_id_phone: null, caller_id_area_code: null,
+        caller_id_strategy: "no_match", lead_area_code: null, error: error.message,
+      });
+      return;
+    }
+    setVerifyResult(data);
+  };
+
+  const strategyMeta = (s: string) => {
+    if (s === "local_presence") return { label: "Local presence match", icon: MapPin, className: "text-emerald-600 dark:text-emerald-400" };
+    if (s === "rotation_fallback") return { label: "Rotation fallback (LRU)", icon: Shuffle, className: "text-amber-600 dark:text-amber-400" };
+    if (s === "manual_override") return { label: "Manual override", icon: ShieldCheck, className: "text-blue-600 dark:text-blue-400" };
+    return { label: "No caller ID matched", icon: AlertCircle, className: "text-destructive" };
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg flex items-center gap-2">
           <Phone className="w-5 h-5" /> Outbound Number Pool ({phones.length})
         </CardTitle>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-1" /> Add Number
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => { setVerifyOpen(true); setVerifyResult(null); }}
+            disabled={phones.length === 0}
+            title={phones.length === 0 ? "Add at least one number to verify" : "Run a dry-run caller-ID selection"}
+          >
+            <ShieldCheck className="w-4 h-4 mr-1" /> Verify caller ID
+          </Button>
+          <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-1" /> Add Number
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {phones.length === 0 ? (
@@ -176,6 +235,62 @@ export default function CampaignPhonePool({ campaignId, phones, onRefresh }: Pro
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleAdd} disabled={saving || (!phoneNumber.trim() && !existingCallerId)}>
               {saving ? "Adding..." : "Add Number"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={verifyOpen} onOpenChange={setVerifyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5" /> Verify caller ID selection
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <Label>Test lead phone (E.164)</Label>
+              <Input
+                value={verifyPhone}
+                onChange={(e) => setVerifyPhone(e.target.value)}
+                placeholder="+14805551234"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                No real call is placed. We just run the selection logic and show which number would be used.
+              </p>
+            </div>
+
+            {verifyResult && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-sm">
+                {(() => {
+                  const meta = strategyMeta(verifyResult.caller_id_strategy);
+                  const Icon = meta.icon;
+                  return (
+                    <div className={`flex items-center gap-2 font-medium ${meta.className}`}>
+                      <Icon className="w-4 h-4" /> {meta.label}
+                    </div>
+                  );
+                })()}
+                <div className="grid grid-cols-[140px_1fr] gap-y-1 font-mono text-xs">
+                  <span className="text-muted-foreground">Lead area code</span>
+                  <span>{verifyResult.lead_area_code ?? "—"}</span>
+                  <span className="text-muted-foreground">Selected from</span>
+                  <span>{verifyResult.from ?? "—"}</span>
+                  <span className="text-muted-foreground">Caller-ID area</span>
+                  <span>{verifyResult.caller_id_area_code ?? "—"}</span>
+                  <span className="text-muted-foreground">Dialing to</span>
+                  <span>{verifyResult.to ?? "—"}</span>
+                </div>
+                {verifyResult.error && (
+                  <p className="text-xs text-destructive">{verifyResult.error}</p>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setVerifyOpen(false)}>Close</Button>
+            <Button onClick={handleVerify} disabled={verifying || !verifyPhone.trim()}>
+              {verifying ? "Verifying…" : "Run verification"}
             </Button>
           </DialogFooter>
         </DialogContent>
