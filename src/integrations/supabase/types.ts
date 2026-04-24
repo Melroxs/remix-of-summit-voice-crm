@@ -112,6 +112,89 @@ export type Database = {
           },
         ]
       }
+      ai_training_materials: {
+        Row: {
+          campaign_id: string | null
+          company_id: string
+          content: string
+          created_at: string
+          created_by: string | null
+          difficulty: string | null
+          id: string
+          is_active: boolean
+          material_type: Database["public"]["Enums"]["training_material_type"]
+          parent_id: string | null
+          scenario: string | null
+          sort_order: number
+          tags: string[]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          company_id: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          difficulty?: string | null
+          id?: string
+          is_active?: boolean
+          material_type: Database["public"]["Enums"]["training_material_type"]
+          parent_id?: string | null
+          scenario?: string | null
+          sort_order?: number
+          tags?: string[]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string | null
+          company_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          difficulty?: string | null
+          id?: string
+          is_active?: boolean
+          material_type?: Database["public"]["Enums"]["training_material_type"]
+          parent_id?: string | null
+          scenario?: string | null
+          sort_order?: number
+          tags?: string[]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_training_materials_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_materials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "client_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_materials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_training_materials_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_training_materials"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           address: string | null
@@ -2203,6 +2286,13 @@ export type Database = {
         | "blocked"
       phone_type: "mobile" | "home" | "work" | "other"
       priority_band: "hot" | "warm" | "medium" | "low" | "excluded"
+      training_material_type:
+        | "script"
+        | "objection"
+        | "rebuttal"
+        | "talking_point"
+        | "qualification_question"
+        | "closing_line"
       urgency_level: "low" | "medium" | "high" | "urgent"
     }
     CompositeTypes: {
@@ -2425,6 +2515,14 @@ export const Constants = {
       ],
       phone_type: ["mobile", "home", "work", "other"],
       priority_band: ["hot", "warm", "medium", "low", "excluded"],
+      training_material_type: [
+        "script",
+        "objection",
+        "rebuttal",
+        "talking_point",
+        "qualification_question",
+        "closing_line",
+      ],
       urgency_level: ["low", "medium", "high", "urgent"],
     },
   },
