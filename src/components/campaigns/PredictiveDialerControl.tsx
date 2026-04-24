@@ -89,6 +89,13 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
           reason: trimmedReason,
           placed: data.placed,
           target: data.target,
+          available_agents: data.available_agents,
+          active_calls: data.active_calls,
+          pacing_ratio: data.pacing_ratio,
+          abandon_rate: data.abandon_rate ?? null,
+          connect_rate: data.connect_rate ?? null,
+          connect_threshold_pct: connectThreshold,
+          ticked_at: new Date().toISOString(),
         },
       }).catch(() => {});
       toast({
