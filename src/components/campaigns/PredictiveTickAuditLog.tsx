@@ -3,6 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Activity, RefreshCw, User, History, Gauge, Phone, Users, TrendingDown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -58,6 +65,8 @@ export default function PredictiveTickAuditLog({
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<TickRow | null>(null);
+  const [copied, setCopied] = useState(false);
 
   /**
    * Fetch one page of audit events. When `before` is set, returns only rows
@@ -150,6 +159,55 @@ export default function PredictiveTickAuditLog({
     return { totalPlaced, totalTarget, count: rows.length };
   }, [rows]);
 
+  // Canonical list of fields we record on each predictive tick. Keeps the
+  // detail drawer consistent and makes missing/null fields explicit.
+  const KNOWN_METRIC_FIELDS: { key: string; label: string }[] = [
+    { key: "source", label: "Source" },
+    { key: "reason", label: "Reason" },
+    { key: "auto_tick_interval_sec", label: "Auto-tick interval (s)" },
+    { key: "placed", label: "Placed" },
+    { key: "target", label: "Target" },
+    { key: "available_agents", label: "Available agents" },
+    { key: "active_calls", label: "Active calls" },
+    { key: "pacing_ratio", label: "Pacing ratio" },
+    { key: "abandon_rate", label: "Abandon rate" },
+    { key: "connect_rate", label: "Connect rate" },
+    { key: "connect_threshold_pct", label: "Connect alert threshold (%)" },
+    { key: "ticked_at", label: "Ticked at (client)" },
+  ];
+
+  const renderFieldValue = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return <span className="text-muted-foreground italic">null</span>;
+    }
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    return JSON.stringify(value);
+  };
+
+  const handleCopyJson = async () => {
+    if (!selectedRow) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(selectedRow.metadata ?? {}, null, 2));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Could not copy JSON to clipboard.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Extra metadata keys not in our canonical list (forward-compatibility)
+  const extraMetadataKeys = useMemo(() => {
+    if (!selectedRow?.metadata) return [];
+    const known = new Set(KNOWN_METRIC_FIELDS.map((f) => f.key));
+    return Object.keys(selectedRow.metadata).filter((k) => !known.has(k));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRow]);
+
   const body = (
     <>
       {summary && (
@@ -193,7 +251,17 @@ export default function PredictiveTickAuditLog({
               return (
                 <li
                   key={row.id}
-                  className="p-3 rounded-md border border-border bg-card"
+                  className="p-3 rounded-md border border-border bg-card cursor-pointer transition-colors hover:bg-accent/40 hover:border-primary/40 focus-within:ring-1 focus-within:ring-ring"
+                  onClick={() => setSelectedRow(row)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedRow(row);
+                    }
+                  }}
+                  aria-label="View full tick metrics snapshot"
                 >
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 h-8 w-8 rounded-full bg-primary/15 text-primary flex items-center justify-center">
@@ -301,6 +369,85 @@ export default function PredictiveTickAuditLog({
           </div>
         </ScrollArea>
       )}
+      <Sheet
+        open={selectedRow !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedRow(null);
+        }}
+      >
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          {selectedRow && (
+            <>
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <Activity className="h-4 w-4" /> Predictive tick details
+                </SheetTitle>
+                <SheetDescription>
+                  {formatDateTime(selectedRow.occurred_at)} ·{" "}
+                  {selectedRow.actor_name || selectedRow.actor_id || "Unknown user"}
+                  {selectedRow.actor_role ? ` · ${selectedRow.actor_role}` : ""}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="mt-4 space-y-4">
+                <div>
+                  <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">
+                    Metrics snapshot
+                  </h4>
+                  <dl className="rounded-md border border-border divide-y divide-border text-sm">
+                    {KNOWN_METRIC_FIELDS.map((f) => {
+                      const v = selectedRow.metadata?.[f.key];
+                      return (
+                        <div
+                          key={f.key}
+                          className="grid grid-cols-2 gap-2 px-3 py-2"
+                        >
+                          <dt className="text-muted-foreground">{f.label}</dt>
+                          <dd className="font-mono text-xs break-all">
+                            {renderFieldValue(v)}
+                          </dd>
+                        </div>
+                      );
+                    })}
+                    {extraMetadataKeys.map((k) => (
+                      <div key={k} className="grid grid-cols-2 gap-2 px-3 py-2">
+                        <dt className="text-muted-foreground">{k}</dt>
+                        <dd className="font-mono text-xs break-all">
+                          {renderFieldValue(selectedRow.metadata?.[k])}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Raw JSON
+                    </h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyJson}
+                      className="h-7 text-xs"
+                    >
+                      {copied ? "Copied" : "Copy JSON"}
+                    </Button>
+                  </div>
+                  <pre className="rounded-md border border-border bg-muted/40 p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                    {JSON.stringify(selectedRow.metadata ?? {}, null, 2)}
+                  </pre>
+                </div>
+
+                <div className="text-[11px] text-muted-foreground">
+                  Event ID:{" "}
+                  <span className="font-mono break-all">{selectedRow.id}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </>
   );
 
