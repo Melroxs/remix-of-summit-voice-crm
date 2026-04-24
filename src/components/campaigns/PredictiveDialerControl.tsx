@@ -4,9 +4,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Activity, Loader2, RefreshCw, Phone, Users, Gauge, AlertTriangle, TrendingDown } from "lucide-react";
 import { tickPredictiveEngine, DialerValidationError } from "@/lib/dialer-service";
+import { logEvent } from "@/lib/audit";
 
 interface Metrics {
   placed: number;
@@ -37,6 +49,8 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
   const [loading, setLoading] = useState(false);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reason, setReason] = useState("");
   const [connectThreshold, setConnectThreshold] = useState<number>(() => {
     const stored = typeof window !== "undefined" ? localStorage.getItem(CONNECT_THRESHOLD_KEY) : null;
     const parsed = stored ? Number(stored) : NaN;
@@ -51,16 +65,38 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
     } catch {}
   };
 
+  const trimmedReason = reason.trim();
+  const reasonValid = trimmedReason.length >= 3;
+
+  const openConfirm = () => {
+    setReason("");
+    setError(null);
+    setConfirmOpen(true);
+  };
+
   const handleTick = async () => {
+    if (!reasonValid) return;
     setLoading(true);
     setError(null);
     try {
       const data = await tickPredictiveEngine(campaignId);
       setMetrics({ ...data, ticked_at: new Date().toISOString() });
+      logEvent({
+        type: "predictive_engine.ticked",
+        entity_type: "campaign",
+        entity_id: campaignId,
+        metadata: {
+          reason: trimmedReason,
+          placed: data.placed,
+          target: data.target,
+        },
+      }).catch(() => {});
       toast({
         title: "Predictive engine ticked",
         description: `Placed ${data.placed} of ${data.target} target calls`,
       });
+      setConfirmOpen(false);
+      setReason("");
     } catch (e: any) {
       const msg =
         e instanceof DialerValidationError
@@ -88,7 +124,7 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
         <CardTitle className="text-lg flex items-center gap-2">
           <Activity className="w-5 h-5" /> Predictive Dialer
         </CardTitle>
-        <Button size="sm" onClick={handleTick} disabled={loading || !enabled}>
+        <Button size="sm" onClick={openConfirm} disabled={loading || !enabled}>
           {loading ? (
             <Loader2 className="w-4 h-4 mr-1 animate-spin" />
           ) : (
@@ -216,6 +252,60 @@ export default function PredictiveDialerControl({ campaignId, enabled = true }: 
           </div>
         )}
       </CardContent>
+      <AlertDialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!loading) setConfirmOpen(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tick the predictive engine?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will manually advance pacing for this campaign and place outbound calls.
+              Provide a short reason for this manual tick — it will be saved to the audit log.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="tick-reason" className="text-sm">
+              Reason <span className="text-destructive">*</span>
+            </Label>
+            <Textarea
+              id="tick-reason"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Catching up after pause, testing pacing change…"
+              rows={3}
+              maxLength={280}
+              autoFocus
+              disabled={loading}
+            />
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {reasonValid ? "Looks good" : "At least 3 characters required"}
+              </span>
+              <span>{trimmedReason.length}/280</span>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleTick();
+              }}
+              disabled={!reasonValid || loading}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-1" />
+              )}
+              Confirm tick
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
