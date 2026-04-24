@@ -2045,11 +2045,36 @@ export type Database = {
       }
     }
     Functions: {
+      complete_dial_attempt: {
+        Args: {
+          _call_attempt_id: string
+          _callback_at?: string
+          _disposition: string
+          _notes?: string
+        }
+        Returns: undefined
+      }
       contact_in_user_company: {
         Args: { _contact_id: string }
         Returns: boolean
       }
       current_company_id: { Args: never; Returns: string }
+      get_next_lead_for_agent: {
+        Args: { _agent_id: string; _campaign_id: string }
+        Returns: {
+          attempts: number
+          campaign_contact_id: string
+          city: string
+          contact_id: string
+          first_name: string
+          last_name: string
+          phone_e164: string
+          priority_band: Database["public"]["Enums"]["priority_band"]
+          priority_score: number
+          state: string
+          zip_code: string
+        }[]
+      }
       get_user_client_account_ids: {
         Args: { _user_id: string }
         Returns: string[]
@@ -2076,6 +2101,14 @@ export type Database = {
           _entity_type?: string
           _event_type: string
           _metadata?: Json
+        }
+        Returns: string
+      }
+      record_call_event: {
+        Args: {
+          _event_type: Database["public"]["Enums"]["call_event_type"]
+          _payload?: Json
+          _telnyx_call_id: string
         }
         Returns: string
       }
