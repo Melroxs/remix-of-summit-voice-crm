@@ -455,6 +455,29 @@ export default function TrainingHub() {
                   </Select>
                 </div>
                 <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Campaign coaching library
+                  </label>
+                  <Select value={campaignId} onValueChange={setCampaignId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a campaign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        Generic — no campaign library
+                      </SelectItem>
+                      {campaigns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    The AI will pull approved scripts and objections from this campaign’s library when role-playing and scoring.
+                  </p>
+                </div>
+                <div>
                   <label className="text-sm font-medium mb-2 block">Difficulty</label>
                   <Select value={difficulty} onValueChange={setDifficulty}>
                     <SelectTrigger>
