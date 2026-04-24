@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    // Don't auto-preload every async chunk transitively. Without this, Vite
+    // emits <link rel="modulepreload"> tags for chunks that the visited route
+    // doesn't actually need (e.g. recharts on the /auth page), causing
+    // Lighthouse "unused JavaScript" warnings.
+    modulePreload: { polyfill: true, resolveDependencies: () => [] },
     rollupOptions: {
       output: {
         manualChunks: {
