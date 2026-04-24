@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { normalizePhoneToE164 } from "@/lib/phone";
 import { contactSchema, firstZodMessage, flattenZodErrors } from "@/lib/validation";
@@ -45,7 +46,21 @@ export default function ContactModal({ onClose, onSaved }: Props) {
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  const phoneValidation = useMemo(() => {
+    const trimmed = (form.phone_raw || "").trim();
+    if (!trimmed) return { required: true, valid: false, error: "Phone number is required" };
+    const n = normalizePhoneToE164(trimmed);
+    return n.valid
+      ? { required: false, valid: true, error: "" }
+      : { required: false, valid: false, error: n.error || "Invalid phone number" };
+  }, [form.phone_raw]);
+
   const handleSave = async () => {
+    if (!phoneValidation.valid) {
+      setFieldErrors((prev) => ({ ...prev, phone_raw: phoneValidation.error }));
+      toast({ title: "Invalid phone number", description: phoneValidation.error, variant: "destructive" });
+      return;
+    }
     const parsed = contactSchema.safeParse(form);
     if (!parsed.success) {
       setFieldErrors(flattenZodErrors(parsed.error));
@@ -102,8 +117,18 @@ export default function ContactModal({ onClose, onSaved }: Props) {
           </div>
           <div className="space-y-2">
             <Label>Phone</Label>
-            <Input value={form.phone_raw} onChange={(e) => update("phone_raw", e.target.value)} placeholder="(602) 555-1234" />
+            <Label>Phone *</Label>
+            <Input
+              value={form.phone_raw}
+              onChange={(e) => update("phone_raw", e.target.value)}
+              placeholder="(602) 555-1234"
+              aria-invalid={!phoneValidation.valid}
+              className={!phoneValidation.valid && form.phone_raw ? "border-destructive focus-visible:ring-destructive" : ""}
+            />
             <PhoneE164Preview rawValue={form.phone_raw} />
+            {fieldErrors.phone_raw && (
+              <p className="text-xs text-destructive">{fieldErrors.phone_raw}</p>
+            )}
           </div>
           <div className="space-y-2 col-span-2">
             <Label>Address</Label>
