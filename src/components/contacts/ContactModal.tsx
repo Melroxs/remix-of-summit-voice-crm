@@ -128,6 +128,7 @@ export default function ContactModal({ onClose, onSaved }: Props) {
             <Input
               value={form.phone_raw}
               onChange={(e) => update("phone_raw", e.target.value)}
+              onBlur={handlePhoneBlur}
               placeholder="(602) 555-1234"
               aria-invalid={!phoneValidation.valid}
               className={!phoneValidation.valid && form.phone_raw ? "border-destructive focus-visible:ring-destructive" : ""}
