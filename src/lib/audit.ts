@@ -50,7 +50,9 @@ export type AuditEventType =
   | "telephony.number_added"
   | "telephony.number_removed"
   | "caller_id.activated"
-  | "caller_id.deactivated";
+  | "caller_id.deactivated"
+  // Predictive dialer
+  | "predictive_engine.ticked";
 
 interface LogEventInput {
   type: AuditEventType;
