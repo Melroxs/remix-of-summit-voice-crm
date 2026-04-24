@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Phone, RefreshCw, Power, Search, Shield, ShieldAlert, ShieldOff, Snowflake, ThermometerSun } from "lucide-react";
+import { ChevronDown, Filter, Phone, RefreshCw, Power, Search, Shield, ShieldAlert, ShieldOff, Snowflake, ThermometerSun, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { formatPhoneDisplay } from "@/lib/phone";
@@ -58,7 +59,10 @@ export default function CallerIdPoolDashboard() {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  // Multi-select campaign filter. Empty set means "All campaigns".
+  // Special id "__unassigned__" represents caller IDs not linked to any campaign.
+  const UNASSIGNED = "__unassigned__";
+  const [campaignFilter, setCampaignFilter] = useState<Set<string>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [auditTarget, setAuditTarget] = useState<PoolRow | null>(null);
@@ -218,10 +222,11 @@ export default function CallerIdPoolDashboard() {
   }, [rows]);
 
   const filtered = rows.filter((r) => {
-    if (campaignFilter === "unassigned") {
-      if (r.campaigns.length > 0) return false;
-    } else if (campaignFilter !== "all") {
-      if (!r.campaigns.some((c) => c.id === campaignFilter)) return false;
+    if (campaignFilter.size > 0) {
+      const wantsUnassigned = campaignFilter.has(UNASSIGNED);
+      const matchesUnassigned = wantsUnassigned && r.campaigns.length === 0;
+      const matchesCampaign = r.campaigns.some((c) => campaignFilter.has(c.id));
+      if (!matchesUnassigned && !matchesCampaign) return false;
     }
     const q = search.trim().toLowerCase();
     if (!q) return true;
@@ -255,6 +260,25 @@ export default function CallerIdPoolDashboard() {
     });
   };
 
+  const toggleCampaignFilter = (id: string, checked: boolean) => {
+    setCampaignFilter((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const filterButtonLabel = (() => {
+    if (campaignFilter.size === 0) return "All campaigns";
+    if (campaignFilter.size === 1) {
+      const only = Array.from(campaignFilter)[0];
+      if (only === UNASSIGNED) return "Unassigned";
+      return campaignOptions.find((c) => c.id === only)?.name ?? "1 campaign";
+    }
+    return `${campaignFilter.size} campaigns`;
+  })();
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -263,20 +287,89 @@ export default function CallerIdPoolDashboard() {
           <CardTitle className="text-lg">Caller ID Pool Health</CardTitle>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-            <SelectTrigger className="h-9 w-52 text-sm">
-              <SelectValue placeholder="Filter by campaign" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All campaigns</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
-              {campaignOptions.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 w-52 justify-between text-sm font-normal"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span className="truncate">{filterButtonLabel}</span>
+                </span>
+                <div className="flex items-center gap-1">
+                  {campaignFilter.size > 0 && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Clear campaign filter"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCampaignFilter(new Set());
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setCampaignFilter(new Set());
+                        }
+                      }}
+                      className="rounded-sm p-0.5 hover:bg-muted"
+                    >
+                      <X className="h-3 w-3" />
+                    </span>
+                  )}
+                  <ChevronDown className="h-3.5 w-3.5 opacity-50" />
+                </div>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-2">
+              <div className="flex items-center justify-between px-1 pb-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Filter by campaign
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setCampaignFilter(new Set())}
+                  disabled={campaignFilter.size === 0}
+                >
+                  Clear
+                </Button>
+              </div>
+              <ScrollArea className="max-h-72">
+                <div className="space-y-1">
+                  <label className="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-muted cursor-pointer">
+                    <Checkbox
+                      checked={campaignFilter.has(UNASSIGNED)}
+                      onCheckedChange={(v) => toggleCampaignFilter(UNASSIGNED, !!v)}
+                    />
+                    <span className="text-sm italic text-muted-foreground">Unassigned</span>
+                  </label>
+                  {campaignOptions.length === 0 ? (
+                    <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                      No campaigns linked yet.
+                    </p>
+                  ) : (
+                    campaignOptions.map((c) => (
+                      <label
+                        key={c.id}
+                        className="flex items-center gap-2 rounded-sm px-2 py-1.5 hover:bg-muted cursor-pointer"
+                      >
+                        <Checkbox
+                          checked={campaignFilter.has(c.id)}
+                          onCheckedChange={(v) => toggleCampaignFilter(c.id, !!v)}
+                        />
+                        <span className="text-sm truncate">{c.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </PopoverContent>
+          </Popover>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
