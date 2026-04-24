@@ -23,6 +23,9 @@ import {
   MicOff,
   Keyboard,
   Volume2,
+  BookOpen,
+  MessageSquareWarning,
+  Quote,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +44,27 @@ interface Simulation {
   duration_seconds: number | null;
 }
 
+interface CampaignOption {
+  id: string;
+  name: string;
+}
+
+interface TrainingMaterial {
+  id: string;
+  material_type:
+    | "script"
+    | "objection"
+    | "rebuttal"
+    | "talking_point"
+    | "qualification_question"
+    | "closing_line";
+  title: string;
+  content: string;
+  parent_id: string | null;
+  scenario: string | null;
+  sort_order: number;
+}
+
 const SCENARIOS: { value: string; label: string; description: string }[] = [
   { value: "cold_homeowner", label: "Cold Homeowner", description: "Skeptical, unsolicited call" },
   { value: "storm_damage", label: "Storm Damage", description: "Recent hailstorm in the area" },
@@ -55,6 +79,10 @@ export default function TrainingHub() {
 
   const [scenario, setScenario] = useState("cold_homeowner");
   const [difficulty, setDifficulty] = useState("medium");
+  const [campaignId, setCampaignId] = useState<string>("none");
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
+  const [materials, setMaterials] = useState<TrainingMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
   const [transcript, setTranscript] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [active, setActive] = useState<string | null>(null);
@@ -98,6 +126,51 @@ export default function TrainingHub() {
   useEffect(() => {
     if (user) loadHistory();
   }, [user]);
+
+  // Load the campaigns this user can see (RLS will filter).
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase
+        .from("campaigns")
+        .select("id, name")
+        .order("name", { ascending: true });
+      setCampaigns((data as CampaignOption[]) ?? []);
+    })();
+  }, [user]);
+
+  // Reload coaching materials whenever the campaign or scenario changes.
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      setMaterialsLoading(true);
+      let q = supabase
+        .from("ai_training_materials")
+        .select("id, material_type, title, content, parent_id, scenario, sort_order")
+        .eq("is_active", true)
+        .order("material_type", { ascending: true })
+        .order("sort_order", { ascending: true })
+        .limit(200);
+
+      if (campaignId !== "none") {
+        q = q.or(`campaign_id.eq.${campaignId},campaign_id.is.null`);
+      } else {
+        q = q.is("campaign_id", null);
+      }
+
+      const { data } = await q;
+      if (cancelled) return;
+      const filtered = (data as TrainingMaterial[] | null)?.filter(
+        (m) => !m.scenario || m.scenario === scenario,
+      );
+      setMaterials(filtered ?? []);
+      setMaterialsLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, campaignId, scenario]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -180,7 +253,13 @@ export default function TrainingHub() {
 
     try {
       const { data, error } = await supabase.functions.invoke("training-simulation", {
-        body: { scenario, difficulty, transcript: next, mode: "reply" },
+        body: {
+          scenario,
+          difficulty,
+          transcript: next,
+          mode: "reply",
+          campaign_id: campaignId !== "none" ? campaignId : null,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -294,7 +373,13 @@ export default function TrainingHub() {
     const duration = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
     try {
       const { data, error } = await supabase.functions.invoke("training-simulation", {
-        body: { scenario, difficulty, transcript: tx, mode: "score" },
+        body: {
+          scenario,
+          difficulty,
+          transcript: tx,
+          mode: "score",
+          campaign_id: campaignId !== "none" ? campaignId : null,
+        },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
