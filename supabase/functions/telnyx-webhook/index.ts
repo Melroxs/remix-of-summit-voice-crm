@@ -28,9 +28,9 @@ async function verifyTelnyxSignature(
   if (ageSec > 300) return false;
 
   try {
-    const publicKeyBytes = b64ToBytes(publicKeyB64);
-    const signatureBytes = b64ToBytes(signatureB64);
-    const message = new TextEncoder().encode(`${timestamp}|${rawBody}`);
+    const publicKeyBytes = b64ToBytes(publicKeyB64).buffer as ArrayBuffer;
+    const signatureBytes = b64ToBytes(signatureB64).buffer as ArrayBuffer;
+    const message = new TextEncoder().encode(`${timestamp}|${rawBody}`).buffer as ArrayBuffer;
 
     const key = await crypto.subtle.importKey(
       "raw",
