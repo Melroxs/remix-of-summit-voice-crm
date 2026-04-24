@@ -48,7 +48,9 @@ export type AuditEventType =
   // Telephony
   | "telephony.provider_updated"
   | "telephony.number_added"
-  | "telephony.number_removed";
+  | "telephony.number_removed"
+  | "caller_id.activated"
+  | "caller_id.deactivated";
 
 interface LogEventInput {
   type: AuditEventType;
