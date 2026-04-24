@@ -53,8 +53,23 @@ export default function ContactModal({ onClose, onSaved }: Props) {
     }
     setFieldErrors({});
     setLoading(true);
-    const phone_e164 = form.phone_raw ? normalizePhoneToE164(form.phone_raw).e164 : "";
-    const { data, error } = await supabase.from("contacts").insert({ ...form, phone_e164 }).select("id").single();
+    let phone_e164 = "";
+    let phone_raw = form.phone_raw?.trim() || "";
+    if (phone_raw) {
+      const result = normalizePhoneToE164(phone_raw);
+      if (!result.valid) {
+        toast({ title: "Invalid phone number", description: result.error, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+      phone_e164 = result.e164;
+      phone_raw = result.e164;
+    }
+    const { data, error } = await supabase
+      .from("contacts")
+      .insert({ ...form, phone_raw, phone_e164 })
+      .select("id")
+      .single();
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {

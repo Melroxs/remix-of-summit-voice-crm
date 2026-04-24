@@ -48,8 +48,22 @@ export default function EditContactModal({ contact, onClose, onSaved }: Props) {
       return;
     }
     setLoading(true);
-    const phone_e164 = form.phone_raw ? normalizePhoneToE164(form.phone_raw).e164 : "";
-    const { error } = await supabase.from("contacts").update({ ...form, phone_e164 }).eq("id", contact.id);
+    let phone_e164 = "";
+    let phone_raw = form.phone_raw?.trim() || "";
+    if (phone_raw) {
+      const result = normalizePhoneToE164(phone_raw);
+      if (!result.valid) {
+        toast({ title: "Invalid phone number", description: result.error, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+      phone_e164 = result.e164;
+      phone_raw = result.e164;
+    }
+    const { error } = await supabase
+      .from("contacts")
+      .update({ ...form, phone_raw, phone_e164 })
+      .eq("id", contact.id);
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
