@@ -15,6 +15,8 @@ import { toast } from "@/hooks/use-toast";
 import CampaignPhonePool from "@/components/campaigns/CampaignPhonePool";
 import { useCampaignPhones } from "@/hooks/use-campaign-phones";
 import PredictiveDialerControl from "@/components/campaigns/PredictiveDialerControl";
+import PredictiveTickAuditLog from "@/components/campaigns/PredictiveTickAuditLog";
+import { useAuth } from "@/hooks/use-auth";
 
 interface CampaignScript {
   id: string;
@@ -26,6 +28,7 @@ interface CampaignScript {
 export default function CampaignDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [campaign, setCampaign] = useState<any>(null);
   const [contacts, setContacts] = useState<any[]>([]);
   const [agents, setAgents] = useState<any[]>([]);
@@ -319,6 +322,11 @@ export default function CampaignDetail() {
           campaignId={id!}
           enabled={campaign.status === "active"}
         />
+      )}
+
+      {/* Admin-only audit log of every predictive tick for this campaign */}
+      {isAdmin && (campaign.dial_mode === "auto_dial" || campaign.dial_mode === "predictive") && (
+        <PredictiveTickAuditLog campaignId={id!} />
       )}
 
       {/* Scripts */}
