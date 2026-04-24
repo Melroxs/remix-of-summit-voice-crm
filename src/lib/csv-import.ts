@@ -247,21 +247,34 @@ export async function processImport(
       // Normalize phone
       if (contact.phone_raw) {
         const normalized = normalizePhoneToE164(contact.phone_raw);
-        if (normalized.valid) {
-          contact.phone_e164 = normalized.e164;
-
-          // Duplicate detection
-          if (existingPhones.has(normalized.e164) || phonesInBatch.has(normalized.e164)) {
-            result.duplicates++;
-            result.failed++;
-            batchErrors.push({ row: idx, message: `Duplicate phone: ${normalized.e164}`, data: contact as any });
-            continue;
-          }
-          phonesInBatch.add(normalized.e164);
-        } else {
-          // Keep the raw phone but no e164
-          contact.phone_e164 = null;
+        if (!normalized.valid) {
+          // Match manual-edit behavior: reject invalid phones rather than
+          // inserting an inconsistent contact (raw set, e164 null).
+          batchErrors.push({
+            row: idx,
+            message: `Invalid phone (${normalized.error || "unknown"})`,
+            data: contact as any,
+          });
+          result.failed++;
+          continue;
         }
+
+        // Duplicate detection
+        if (existingPhones.has(normalized.e164) || phonesInBatch.has(normalized.e164)) {
+          result.duplicates++;
+          result.failed++;
+          batchErrors.push({
+            row: idx,
+            message: `Duplicate phone: ${normalized.e164}`,
+            data: contact as any,
+          });
+          continue;
+        }
+
+        // Sync both fields to the canonical E.164 form (mirrors EditContactModal).
+        contact.phone_e164 = normalized.e164;
+        contact.phone_raw = normalized.e164;
+        phonesInBatch.add(normalized.e164);
       }
 
       toInsert.push({ ...contact, lead_import_id: jobId });
