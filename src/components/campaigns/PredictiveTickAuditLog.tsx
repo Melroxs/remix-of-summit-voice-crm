@@ -283,10 +283,87 @@ export default function PredictiveTickAuditLog({
 
   const body = (
     <>
+      {/* Filters */}
+      <div className="mb-3 rounded-md border border-border bg-muted/20 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Filter className="h-3.5 w-3.5" /> Filters
+          </div>
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-7 text-xs"
+            >
+              <X className="h-3 w-3 mr-1" /> Clear
+            </Button>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="space-y-1">
+            <Label htmlFor="tick-from" className="text-xs">From</Label>
+            <Input
+              id="tick-from"
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="tick-to" className="text-xs">To</Label>
+            <Input
+              id="tick-to"
+              type="datetime-local"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Actor</Label>
+            <Select value={actorFilter} onValueChange={setActorFilter}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue placeholder="Any actor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any actor</SelectItem>
+                {actorOptions.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name}
+                    {a.role ? ` (${a.role})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Connect rate</Label>
+            <div className="flex items-center gap-2 h-8">
+              <Switch
+                id="low-connect"
+                checked={lowConnectOnly}
+                onCheckedChange={setLowConnectOnly}
+              />
+              <Label
+                htmlFor="low-connect"
+                className="text-xs font-normal cursor-pointer flex items-center gap-1"
+              >
+                <TrendingDown className="h-3 w-3" /> Below threshold only
+              </Label>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {summary && (
         <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3 flex-wrap">
           <span>
             <span className="font-medium text-foreground">{summary.count}</span> ticks
+            {lowConnectOnly && rows.length !== visibleRows.length && (
+              <span className="text-muted-foreground"> (of {rows.length} loaded)</span>
+            )}
           </span>
           <span>·</span>
           <span>
@@ -301,14 +378,16 @@ export default function PredictiveTickAuditLog({
         <p className="text-sm text-muted-foreground py-6 text-center">
           Loading tick history…
         </p>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <p className="text-sm text-muted-foreground py-6 text-center">
-          No predictive ticks recorded for this campaign yet.
+          {hasActiveFilters
+            ? "No ticks match the current filters."
+            : "No predictive ticks recorded for this campaign yet."}
         </p>
       ) : (
         <ScrollArea className="max-h-[60vh] pr-3">
           <ul className="space-y-2">
-            {rows.map((row) => {
+            {visibleRows.map((row) => {
               const m = row.metadata || {};
               const placed = Number(m.placed) || 0;
               const target = Number(m.target) || 0;
