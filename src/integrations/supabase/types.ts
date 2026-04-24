@@ -1155,6 +1155,7 @@ export type Database = {
           created_at: string
           credit_rating: string | null
           email: string | null
+          email_secondary: string | null
           first_name: string
           home_value: string | null
           household_income: string | null
@@ -1165,14 +1166,20 @@ export type Database = {
           lead_status: Database["public"]["Enums"]["lead_status"] | null
           locked_at: string | null
           locked_to_agent_id: string | null
+          mailing_address: string | null
+          mailing_city: string | null
+          mailing_state: string | null
+          mailing_zip: string | null
           owner_renter: string | null
           phone_e164: string | null
           phone_raw: string | null
+          property_type: string | null
           state: string | null
           tags: string[]
           timezone: string | null
           title: string | null
           updated_at: string
+          year_built: string | null
           zip_code: string | null
         }
         Insert: {
@@ -1184,6 +1191,7 @@ export type Database = {
           created_at?: string
           credit_rating?: string | null
           email?: string | null
+          email_secondary?: string | null
           first_name: string
           home_value?: string | null
           household_income?: string | null
@@ -1194,14 +1202,20 @@ export type Database = {
           lead_status?: Database["public"]["Enums"]["lead_status"] | null
           locked_at?: string | null
           locked_to_agent_id?: string | null
+          mailing_address?: string | null
+          mailing_city?: string | null
+          mailing_state?: string | null
+          mailing_zip?: string | null
           owner_renter?: string | null
           phone_e164?: string | null
           phone_raw?: string | null
+          property_type?: string | null
           state?: string | null
           tags?: string[]
           timezone?: string | null
           title?: string | null
           updated_at?: string
+          year_built?: string | null
           zip_code?: string | null
         }
         Update: {
@@ -1213,6 +1227,7 @@ export type Database = {
           created_at?: string
           credit_rating?: string | null
           email?: string | null
+          email_secondary?: string | null
           first_name?: string
           home_value?: string | null
           household_income?: string | null
@@ -1223,14 +1238,20 @@ export type Database = {
           lead_status?: Database["public"]["Enums"]["lead_status"] | null
           locked_at?: string | null
           locked_to_agent_id?: string | null
+          mailing_address?: string | null
+          mailing_city?: string | null
+          mailing_state?: string | null
+          mailing_zip?: string | null
           owner_renter?: string | null
           phone_e164?: string | null
           phone_raw?: string | null
+          property_type?: string | null
           state?: string | null
           tags?: string[]
           timezone?: string | null
           title?: string | null
           updated_at?: string
+          year_built?: string | null
           zip_code?: string | null
         }
         Relationships: [
