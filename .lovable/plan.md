@@ -1,51 +1,33 @@
+Generate a Word (.docx) version of the existing `Summit_Leads_Workflow.mmd` so it can be shared/edited in Word.
 
-# Team Leader / Supervisor Module
+### Approach
 
-## Phase 1: Database & Role Setup
-1. **Add `team_leader` to `app_role` enum**
-2. **Create `qa_scores` table** — stores per-call QA ratings (7 categories, 1-5 each), notes, feedback, scored_by
-3. **Create `agent_feedback` table** — coaching notes from team leaders to agents
-4. **Update RLS policies** — team leaders can view agents/calls in their assigned campaigns, score calls, leave feedback
-5. **Enable realtime** on `profiles` table for live status updates
+Use the docx skill (Node.js `docx` library) to programmatically build a structured, professional Word document — not just a flat text dump of the Mermaid file. The diagram itself doesn't render natively in Word, so I'll convert its content into readable, navigable sections.
 
-## Phase 2: Live Team Dashboard
-- New page `/team-dashboard` with RoleGuard for `team_leader` + `admin`
-- Real-time agent status grid (online/on_call/paused/wrap_up/offline)
-- Today's metrics: total calls, calls/hour, connection rate, appointments, callbacks, avg duration
-- Per-agent row: status, calls today, appointments, conversion rate, last call time
-- Realtime subscription on `profiles` for status changes
+### Document structure
 
-## Phase 3: Live Call Monitoring UI
-- "Live Calls" panel showing active calls (from `call_logs` where `ended_at IS NULL`)
-- Listen / Whisper / Barge buttons per call
-- **Important caveat**: Actual listen/whisper/barge requires Telnyx Conference API or Twilio Conference — I'll build the UI + edge function scaffolding that calls the Telnyx API to add a supervisor leg. Full functionality depends on Telnyx account having conference/supervision features enabled.
+1. **Title** — "Summit Leads — System Workflow", subtitle, generation date.
+2. **Overview** — short paragraph explaining the doc covers admin, agent, team leader, and client flows plus background automation.
+3. **Entry & Routing** — auth → role-based routing (admin / agent / team_leader / client), bullet list.
+4. **Admin: Setup & Configuration** — bullet list (Users, CRM Settings, Imports → Mapper → Dry-run → Insert, Campaigns → Verify Caller ID → Activate).
+5. **Agent: Dialing Loop** — ordered list following `useDialerQueue` → suppression filters → LeadCard → Telnyx WebRTC → call events → wrap-up → disposition branches (appointment / callback / retry / terminal).
+6. **Background Automation** — bullets for `telnyx-webhook`, `ai-call-summary`, `predictive-dialer-engine` → `telnyx-create-call`, follow-up tasks.
+7. **Team Leader: Oversight** — bullets for Live Calls (listen/whisper/barge), QA Dashboard, Agent Performance, Feedback loop.
+8. **Client: Read-Only Portal** — short paragraph.
+9. **Reports** — short paragraph on aggregate KPIs sourcing from recordings, summaries, tasks.
+10. **Appendix: Mermaid source** — raw `.mmd` content in a monospaced block so anyone can re-render the diagram in Mermaid Live Editor or paste back into Lovable.
 
-## Phase 4: QA Scoring System
-- QA scoring form accessible from call records and recordings
-- 7 categories with 1-5 ratings
-- Auto-calculated total score
-- QA Dashboard: avg scores per agent, trends, top/bottom performers
+### Styling
+- US Letter, 1" margins
+- Arial default, 12pt body
+- Heading 1 / Heading 2 overridden with consistent sizing & spacing
+- Bullet lists via `LevelFormat.BULLET` (no unicode bullets)
+- Appendix code in a monospaced run
 
-## Phase 5: Agent Performance Dashboard
-- Per-agent stats: calls, answer rate, appointments, conversion, QA score, avg duration
-- Filterable by campaign and date range
+### Output & QA
+- Write to `/mnt/documents/Summit_Leads_Workflow.docx`
+- Validate the .docx with the skill's `validate_document.py`
+- Convert to PDF + page images and visually inspect every page for layout issues, clipping, or overflow before delivering
+- Emit `<lov-artifact>` tag for the .docx
 
-## Phase 6: Coaching & Feedback
-- Team leaders can leave feedback per call or per agent
-- Agents can view their own feedback and QA scores
-- Coaching history timeline
-
-## Phase 7: Navigation & Permissions
-- Add sidebar items for team_leader role
-- Update `create-user` edge function to support team_leader role
-- Update UserManagement to assign team_leader role
-
-## Pages Created
-- `/team-dashboard` — Live team monitoring
-- `/qa-scoring` — QA dashboard + scoring interface
-- `/agent-performance` — Performance metrics
-
-## Technical Notes
-- Listen/Whisper/Barge: Will create edge function that uses Telnyx Call Control API (`conference` commands). Requires active Telnyx conference support on the account.
-- Realtime: Will use Supabase Realtime on profiles + call_logs for live updates.
-- All data protected by RLS — team leaders see only campaigns they're assigned to.
+No app/codebase changes — this is a one-off document generation task into `/mnt/documents/`.
