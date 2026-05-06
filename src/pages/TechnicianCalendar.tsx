@@ -26,6 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChevronDown, Users } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 const HOUR_START = 7;
 const HOUR_END = 19;
@@ -41,6 +42,8 @@ const statusColor: Record<string, string> = {
 };
 
 export default function TechnicianCalendar() {
+  const { role } = useAuth();
+  const isClient = role === "client";
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [techModalOpen, setTechModalOpen] = useState(false);
   const [editingTech, setEditingTech] = useState<Technician | null>(null);
@@ -103,10 +106,12 @@ export default function TechnicianCalendar() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Technician Calendar</h1>
           <p className="text-sm text-muted-foreground">
-            Schedule on-site technicians and track field appointments.
+            {isClient
+              ? "View scheduled on-site technician visits for your campaigns."
+              : "Schedule on-site technicians and track field appointments."}
           </p>
         </div>
-        <div className="flex gap-2">
+        {!isClient && <div className="flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -131,7 +136,7 @@ export default function TechnicianCalendar() {
           <Button onClick={() => openNewAppt()}>
             <Plus className="w-4 h-4 mr-1.5" /> Appointment
           </Button>
-        </div>
+        </div>}
       </header>
 
       {/* Date nav */}
@@ -160,10 +165,14 @@ export default function TechnicianCalendar() {
       ) : activeTechs.length === 0 ? (
         <Card className="p-12 text-center">
           <CalendarDays className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-          <p className="text-muted-foreground mb-4">No active technicians yet.</p>
-          <Button onClick={() => { setEditingTech(null); setTechModalOpen(true); }}>
-            <UserPlus className="w-4 h-4 mr-1.5" /> Add your first technician
-          </Button>
+          <p className="text-muted-foreground mb-4">
+            {isClient ? "No technicians configured yet." : "No active technicians yet."}
+          </p>
+          {!isClient && (
+            <Button onClick={() => { setEditingTech(null); setTechModalOpen(true); }}>
+              <UserPlus className="w-4 h-4 mr-1.5" /> Add your first technician
+            </Button>
+          )}
         </Card>
       ) : (
         <Card className="overflow-x-auto">
@@ -204,20 +213,23 @@ export default function TechnicianCalendar() {
                         </div>
                       )}
                     </div>
-                    <button
-                      onClick={() => openEditTech(tech)}
-                      className="text-muted-foreground hover:text-foreground"
-                      title="Edit"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
+                    {!isClient && (
+                      <button
+                        onClick={() => openEditTech(tech)}
+                        className="text-muted-foreground hover:text-foreground"
+                        title="Edit"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Time grid */}
                   <div
-                    className="relative cursor-pointer"
+                    className={`relative ${isClient ? "" : "cursor-pointer"}`}
                     style={{ height: `${(HOUR_END - HOUR_START + 1) * SLOT_HEIGHT}px` }}
                     onClick={(e) => {
+                      if (isClient) return;
                       if ((e.target as HTMLElement).closest("[data-appt]")) return;
                       openNewAppt(tech.id);
                     }}
@@ -233,8 +245,8 @@ export default function TechnicianCalendar() {
                       <div
                         key={a.id}
                         data-appt
-                        onClick={(e) => { e.stopPropagation(); openEditAppt(a); }}
-                        className={`absolute left-1 right-1 rounded-md border px-1.5 py-1 overflow-hidden text-[11px] cursor-pointer hover:opacity-90 ${statusColor[a.status]}`}
+                        onClick={(e) => { e.stopPropagation(); if (!isClient) openEditAppt(a); }}
+                        className={`absolute left-1 right-1 rounded-md border px-1.5 py-1 overflow-hidden text-[11px] ${isClient ? "" : "cursor-pointer hover:opacity-90"} ${statusColor[a.status]}`}
                         style={blockStyle(a)}
                       >
                         <div className="font-semibold truncate">
