@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import {
   Phone, CalendarClock, TrendingUp, Users, Target, Repeat, ShieldOff, Disc3,
-  PhoneIncoming, BarChart3,
+  PhoneIncoming, BarChart3, Wrench, ClipboardList, CheckCircle2, XCircle,
 } from "lucide-react";
 import { ReportFilters, type DateRange, rangeFromPreset } from "@/components/reports/ReportFilters";
 import { StatCard } from "@/components/reports/StatCard";
@@ -46,6 +46,29 @@ interface SessionRow {
   started_at: string;
   ended_at: string | null;
   paused_seconds: number;
+}
+
+interface TechApptRow {
+  id: string;
+  technician_id: string;
+  campaign_id: string | null;
+  contact_id: string | null;
+  status: string;
+  start_time: string;
+  end_time: string;
+  lead_address: string | null;
+  required_skill: string | null;
+  created_at: string;
+}
+
+interface FollowUpRow {
+  id: string;
+  task_type: string;
+  status: string;
+  due_at: string;
+  completed_at: string | null;
+  agent_id: string | null;
+  created_at: string;
 }
 
 const COLORS = ["hsl(var(--primary))", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
@@ -85,6 +108,9 @@ export default function Reports() {
   const [calls, setCalls] = useState<CallRow[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
+  const [techAppts, setTechAppts] = useState<TechApptRow[]>([]);
+  const [followUps, setFollowUps] = useState<FollowUpRow[]>([]);
+  const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([]);
   const [totalContacts, setTotalContacts] = useState(0);
   const [callbackBacklog, setCallbackBacklog] = useState(0);
   const [dncCount, setDncCount] = useState(0);
@@ -95,9 +121,11 @@ export default function Reports() {
     Promise.all([
       supabase.from("campaigns").select("id, name").order("name"),
       supabase.from("profiles").select("user_id, display_name, email"),
-    ]).then(([camps, profs]) => {
+      supabase.from("technicians").select("id, name").order("name"),
+    ]).then(([camps, profs, techs]) => {
       setCampaigns(camps.data || []);
       setProfiles(profs.data || []);
+      setTechnicians(techs.data || []);
     });
   }, []);
 
@@ -138,7 +166,28 @@ export default function Reports() {
           .limit(5000);
       };
 
-      const [callsRes, apptsRes, sessRes, contactsRes, callbacksRes, dncRes] = await Promise.all([
+      const buildTechAppts = () => {
+        let q = supabase
+          .from("technician_appointments")
+          .select("id, technician_id, campaign_id, contact_id, status, start_time, end_time, lead_address, required_skill, created_at")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .limit(5000);
+        if (selectedCampaign !== "all") q = q.eq("campaign_id", selectedCampaign);
+        return q;
+      };
+      const buildFollowUps = () => {
+        let q = supabase
+          .from("follow_up_tasks")
+          .select("id, task_type, status, due_at, completed_at, agent_id, created_at, campaign_id")
+          .gte("created_at", fromIso)
+          .lte("created_at", toIso)
+          .limit(5000);
+        if (selectedCampaign !== "all") q = q.eq("campaign_id", selectedCampaign);
+        return q;
+      };
+
+      const [callsRes, apptsRes, sessRes, contactsRes, callbacksRes, dncRes, techRes, fuRes] = await Promise.all([
         buildCall(),
         buildAppt(),
         buildSessions(),
@@ -149,6 +198,8 @@ export default function Reports() {
           .eq("status", "pending")
           .lte("callback_at", new Date().toISOString()),
         supabase.from("dnc_entries").select("id", { count: "exact", head: true }),
+        buildTechAppts(),
+        buildFollowUps(),
       ]);
 
       setCalls(callsRes.data || []);
@@ -157,6 +208,8 @@ export default function Reports() {
       setTotalContacts(contactsRes.count || 0);
       setCallbackBacklog(callbacksRes.count || 0);
       setDncCount(dncRes.count || 0);
+      setTechAppts((techRes.data as TechApptRow[]) || []);
+      setFollowUps((fuRes.data as FollowUpRow[]) || []);
       setLoading(false);
     };
     fetchAll();
@@ -169,6 +222,60 @@ export default function Reports() {
     const p = profiles.find((x) => x.user_id === id);
     return p?.display_name || p?.email?.split("@")[0] || id.slice(0, 8);
   };
+  const techName = (id: string | null) =>
+    id ? technicians.find((t) => t.id === id)?.name || "Unknown" : "—";
+
+  // ----- Appointment history (sales + technician) -----
+  const appointmentHistory = useMemo(() => {
+    const sales = appointments.map((a) => ({
+      id: a.id,
+      type: "Sales" as const,
+      when: a.appointment_at,
+      created_at: a.created_at,
+      status: a.status || "booked",
+      campaign: campaignName(a.campaign_id),
+      who: agentName(a.agent_id),
+    }));
+    const tech = techAppts.map((t) => ({
+      id: t.id,
+      type: "Technician" as const,
+      when: t.start_time,
+      created_at: t.created_at,
+      status: t.status,
+      campaign: campaignName(t.campaign_id),
+      who: techName(t.technician_id),
+    }));
+    return [...sales, ...tech].sort((a, b) => b.when.localeCompare(a.when));
+  }, [appointments, techAppts, campaigns, profiles, technicians]);
+
+  // ----- Tech appointment status breakdown -----
+  const techStatusBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of techAppts) map.set(t.status, (map.get(t.status) || 0) + 1);
+    return Array.from(map.entries()).map(([status, value]) => ({
+      name: status.replace(/_/g, " "),
+      value,
+    }));
+  }, [techAppts]);
+
+  // ----- Follow-up task stats -----
+  const followUpStats = useMemo(() => {
+    const total = followUps.length;
+    const completed = followUps.filter((f) => f.status === "completed").length;
+    const pending = followUps.filter((f) => f.status === "pending").length;
+    const overdue = followUps.filter(
+      (f) => f.status === "pending" && new Date(f.due_at) < new Date(),
+    ).length;
+    return { total, completed, pending, overdue, completionRate: total ? (completed / total) * 100 : 0 };
+  }, [followUps]);
+
+  const apptStatusBreakdown = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const a of appointments) map.set(a.status || "booked", (map.get(a.status || "booked") || 0) + 1);
+    return Array.from(map.entries()).map(([status, value]) => ({
+      name: status.replace(/_/g, " "), value,
+    }));
+  }, [appointments]);
 
   // ----- Core ROI metrics -----
   const metrics = useMemo(() => {
