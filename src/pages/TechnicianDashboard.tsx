@@ -125,7 +125,7 @@ export default function TechnicianDashboard() {
   const updateStatus = async (apptId: string, status: string) => {
     const { error } = await supabase
       .from("technician_appointments")
-      .update({ status })
+      .update({ status: status as TechAppt["status"] })
       .eq("id", apptId);
     if (error) {
       toast.error(error.message);
