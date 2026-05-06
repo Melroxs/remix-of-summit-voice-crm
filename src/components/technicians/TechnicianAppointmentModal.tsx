@@ -694,7 +694,23 @@ export default function TechnicianAppointmentModal({
                     />
                   </PopoverContent>
                 </Popover>
-                <Select value={startTime} onValueChange={setStartTime}>
+                <Select
+                  value={startTime}
+                  onValueChange={(v) => {
+                    setStartTime(v);
+                    // Auto-shift end to +60 min for a default 1-hour appointment
+                    const [h, m] = v.split(":").map(Number);
+                    const total = h * 60 + m + 60;
+                    const eh = Math.floor(total / 60) % 24;
+                    const em = total % 60;
+                    setEndTime(
+                      `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`,
+                    );
+                    if (startDate && (!endDate || endDate < startDate)) {
+                      setEndDate(startDate);
+                    }
+                  }}
+                >
                   <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
                   <SelectContent className="max-h-64">
                     {TIME_SLOTS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
