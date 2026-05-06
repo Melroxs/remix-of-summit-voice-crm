@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { email, password, display_name, role, campaign_ids, client_account_id } = body;
+    const { email, password, display_name, role, campaign_ids, client_account_id, technician_id } = body;
 
     if (!email || !password || !role) {
       return new Response(JSON.stringify({ error: "email, password, and role are required" }), {
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const validRoles = ["admin", "manager", "team_leader", "agent", "client"];
+    const validRoles = ["admin", "manager", "team_leader", "agent", "technician", "client"];
     if (!validRoles.includes(role)) {
       return new Response(JSON.stringify({ error: `Invalid role: ${role}` }), {
         status: 400,
@@ -134,6 +134,14 @@ Deno.serve(async (req) => {
         user_id: userId,
         client_account_id,
       });
+    }
+
+    // Link to technician record if technician
+    if (role === "technician" && technician_id) {
+      await supabaseAdmin
+        .from("technicians")
+        .update({ user_id: userId })
+        .eq("id", technician_id);
     }
 
     return new Response(
