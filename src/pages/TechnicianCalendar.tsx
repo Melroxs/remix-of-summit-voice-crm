@@ -174,7 +174,7 @@ export default function TechnicianCalendar() {
           <p className="text-muted-foreground mb-4">
             {isClient ? "No technicians configured yet." : "No active technicians yet."}
           </p>
-          {!isClient && (
+          {!readOnly && (
             <Button onClick={() => { setEditingTech(null); setTechModalOpen(true); }}>
               <UserPlus className="w-4 h-4 mr-1.5" /> Add your first technician
             </Button>
@@ -219,7 +219,7 @@ export default function TechnicianCalendar() {
                         </div>
                       )}
                     </div>
-                    {!isClient && (
+                    {!readOnly && (
                       <button
                         onClick={() => openEditTech(tech)}
                         className="text-muted-foreground hover:text-foreground"
@@ -232,10 +232,10 @@ export default function TechnicianCalendar() {
 
                   {/* Time grid */}
                   <div
-                    className={`relative ${isClient ? "" : "cursor-pointer"}`}
+                    className={`relative ${readOnly ? "" : "cursor-pointer"}`}
                     style={{ height: `${(HOUR_END - HOUR_START + 1) * SLOT_HEIGHT}px` }}
                     onClick={(e) => {
-                      if (isClient) return;
+                      if (readOnly) return;
                       if ((e.target as HTMLElement).closest("[data-appt]")) return;
                       openNewAppt(tech.id);
                     }}
@@ -251,8 +251,8 @@ export default function TechnicianCalendar() {
                       <div
                         key={a.id}
                         data-appt
-                        onClick={(e) => { e.stopPropagation(); if (!isClient) openEditAppt(a); }}
-                        className={`absolute left-1 right-1 rounded-md border px-1.5 py-1 overflow-hidden text-[11px] ${isClient ? "" : "cursor-pointer hover:opacity-90"} ${statusColor[a.status]}`}
+                        onClick={(e) => { e.stopPropagation(); if (!readOnly) openEditAppt(a); }}
+                        className={`absolute left-1 right-1 rounded-md border px-1.5 py-1 overflow-hidden text-[11px] ${readOnly ? "" : "cursor-pointer hover:opacity-90"} ${statusColor[a.status]}`}
                         style={blockStyle(a)}
                       >
                         <div className="font-semibold truncate">
