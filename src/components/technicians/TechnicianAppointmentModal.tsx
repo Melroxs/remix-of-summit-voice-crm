@@ -26,6 +26,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { getTravelTime } from "@/lib/routing";
+import { findBestTechnicians, type RankedSlot } from "@/lib/auto-assign";
 import {
   useSaveTechAppointment,
   useDeleteTechAppointment,
@@ -470,6 +471,59 @@ export default function TechnicianAppointmentModal({
     );
   };
 
+  // Auto-assign: find best technicians across the next 7 days
+  const [autoLoading, setAutoLoading] = useState(false);
+  const [autoOptions, setAutoOptions] = useState<RankedSlot[] | null>(null);
+  const [autoError, setAutoError] = useState<string | null>(null);
+
+  const runAutoAssign = async () => {
+    if (!leadAddress.trim()) {
+      toast.error("Enter a lead address first");
+      return;
+    }
+    const durationMin =
+      startDt && endDt && endDt > startDt
+        ? Math.round((endDt.getTime() - startDt.getTime()) / 60000)
+        : 60;
+    setAutoLoading(true);
+    setAutoError(null);
+    setAutoOptions(null);
+    try {
+      const results = await findBestTechnicians({
+        technicians,
+        leadAddress,
+        durationMinutes: durationMin,
+        requiredSkill: requiredSkill.trim() || null,
+        fromDate: startDate ?? new Date(),
+        daysAhead: 7,
+        limit: 5,
+        excludeAppointmentId: appointment?.id,
+      });
+      setAutoOptions(results);
+      if (results.length === 0) {
+        toast.info("No available slots found in the next 7 days");
+      }
+    } catch (e) {
+      setAutoError((e as Error).message);
+    } finally {
+      setAutoLoading(false);
+    }
+  };
+
+  const applyAutoOption = (opt: RankedSlot) => {
+    setTechnicianId(opt.technician.id);
+    setStartDate(opt.start);
+    setEndDate(opt.end);
+    setStartTime(
+      `${String(opt.start.getHours()).padStart(2, "0")}:${String(opt.start.getMinutes()).padStart(2, "0")}`,
+    );
+    setEndTime(
+      `${String(opt.end.getHours()).padStart(2, "0")}:${String(opt.end.getMinutes()).padStart(2, "0")}`,
+    );
+    setAutoOptions(null);
+    toast.success(`Assigned to ${opt.technician.name}`);
+  };
+
   const submit = async () => {
     if (!technicianId) {
       toast.error("Select a technician");
@@ -673,6 +727,66 @@ export default function TechnicianAppointmentModal({
             <Label>Lead address</Label>
             <Textarea value={leadAddress} onChange={(e) => setLeadAddress(e.target.value)} rows={2} />
           </div>
+
+          {/* Auto-assign best technician */}
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium">Auto-assign best technician</div>
+                <div className="text-xs text-muted-foreground">
+                  Searches next 7 days for the earliest available tech.
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={runAutoAssign}
+                disabled={autoLoading || !leadAddress.trim()}
+              >
+                {autoLoading ? "Searching…" : "Find best slot"}
+              </Button>
+            </div>
+            {autoError && (
+              <div className="text-xs text-destructive">{autoError}</div>
+            )}
+            {autoOptions && autoOptions.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-xs text-muted-foreground">
+                  Top {autoOptions.length} option{autoOptions.length === 1 ? "" : "s"} (earliest first):
+                </div>
+                <ul className="space-y-1">
+                  {autoOptions.map((opt, i) => (
+                    <li
+                      key={`${opt.technician.id}-${opt.start.toISOString()}`}
+                      className="flex items-center justify-between gap-2 rounded border border-border bg-background px-2 py-1.5 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-foreground truncate">
+                          {i + 1}. {opt.technician.name}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {format(opt.start, "EEE MMM d, HH:mm")}–{format(opt.end, "HH:mm")}
+                          {opt.travelInMin != null && (
+                            <> · ~{opt.travelInMin} min from {opt.originLabel}</>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => applyAutoOption(opt)}
+                      >
+                        Use
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Required skill</Label>
