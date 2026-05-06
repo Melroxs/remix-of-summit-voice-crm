@@ -94,6 +94,7 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Resolve client's accessible campaigns
   useEffect(() => {
@@ -285,7 +286,23 @@ export default function ClientPortal() {
       setLoading(false);
     };
     fetchAll();
-  }, [campaignIds, selectedCampaign, range, campaigns]);
+  }, [campaignIds, selectedCampaign, range, campaigns, reloadKey]);
+
+  // Realtime: refresh when technicians update appointment status
+  useEffect(() => {
+    if (campaignIds.length === 0) return;
+    const channel = supabase
+      .channel("client-tech-appts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "technician_appointments" },
+        () => setReloadKey((k) => k + 1),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [campaignIds]);
 
   const getSecureUrl = async (id: string) => {
     const { data, error } = await supabase.functions.invoke("get-recording-url", {
