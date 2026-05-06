@@ -121,6 +121,13 @@ export default function TechnicianAppointmentModal({
   interface AvailabilityInfo {
     prev: { id: string; address: string | null; end: Date; travelMin: number | null } | null;
     next: { id: string; address: string | null; start: Date; travelMin: number | null } | null;
+    overlap: {
+      id: string;
+      address: string | null;
+      start: Date;
+      end: Date;
+      travelMin: number | null;
+    } | null;
     originLabel: "previous appointment" | "home address" | null;
     originAddress: string | null;
     travelInMin: number | null; // drive into the new job
@@ -272,9 +279,25 @@ export default function TechnicianAppointmentModal({
         (a) => a.start < endDt && a.end > startDt,
       );
       if (overlap) {
+        const originAddress =
+          selectedTech.home_address?.trim() || null;
+        const overlapDriveMin = overlap.address
+          ? await getTravelTime(
+              originAddress || leadAddress.trim(),
+              overlap.address.trim(),
+            )
+          : null;
+        if (cancelled) return;
         setAvail({
           prev: null,
           next: null,
+          overlap: {
+            id: overlap.id,
+            address: overlap.address,
+            start: overlap.start,
+            end: overlap.end,
+            travelMin: overlapDriveMin,
+          },
           originLabel: null,
           originAddress: null,
           travelInMin: null,
@@ -336,6 +359,7 @@ export default function TechnicianAppointmentModal({
         next: next
           ? { id: next.id, address: next.address, start: next.start, travelMin: travelOutMin }
           : null,
+        overlap: null,
         originLabel,
         originAddress,
         travelInMin,
@@ -619,7 +643,26 @@ export default function TechnicianAppointmentModal({
                 <div className="text-muted-foreground">{availError}</div>
               ) : avail ? (
                 <>
+                  {/* Overlap details */}
+                  {avail.overlap && (
+                    <div className="rounded border border-destructive/50 bg-destructive/10 p-2 space-y-0.5">
+                      <div className="font-medium text-destructive">
+                        Conflict: {format(avail.overlap.start, "HH:mm")}–{format(avail.overlap.end, "HH:mm")}
+                      </div>
+                      {avail.overlap.address && (
+                        <div className="text-muted-foreground truncate" title={avail.overlap.address}>
+                          At: {avail.overlap.address}
+                        </div>
+                      )}
+                      {avail.overlap.travelMin != null && (
+                        <div className="text-muted-foreground">
+                          ~{avail.overlap.travelMin} min drive to that job
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {/* Inbound leg */}
+                  {!avail.overlap && (
                   <div className="text-foreground">
                     {avail.travelInMin != null ? (
                       <>
@@ -635,19 +678,20 @@ export default function TechnicianAppointmentModal({
                       </span>
                     )}
                   </div>
-                  {avail.originAddress && (
+                  )}
+                  {!avail.overlap && avail.originAddress && (
                     <div className="text-muted-foreground truncate" title={avail.originAddress}>
                       From: {avail.originAddress}
                     </div>
                   )}
-                  {avail.departBy && (
+                  {!avail.overlap && avail.departBy && (
                     <div className="text-muted-foreground">
                       Suggested depart by: {format(avail.departBy, "MMM d, HH:mm")}
                     </div>
                   )}
 
                   {/* Outbound leg */}
-                  {avail.next && (
+                  {!avail.overlap && avail.next && (
                     <div className="pt-1 border-t border-border/50">
                       <div className="text-foreground">
                         Next job at {format(avail.next.start, "HH:mm")}
@@ -662,7 +706,7 @@ export default function TechnicianAppointmentModal({
                       )}
                     </div>
                   )}
-                  {!avail.next && !avail.prev && (
+                  {!avail.overlap && !avail.next && !avail.prev && (
                     <div className="text-muted-foreground">
                       No other appointments scheduled this day.
                     </div>
