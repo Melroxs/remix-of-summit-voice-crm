@@ -602,12 +602,23 @@ export default function Dialer() {
         <CallbackModal contactId={currentLead.contact_id} contactName={`${currentLead.first_name} ${currentLead.last_name}`}
           campaignId={campaignId} onClose={handleModalClose} onSaved={handleModalSaved} />
       )}
-      {showAppointmentModal && currentLead && (
-        <AppointmentModal contactId={currentLead.contact_id} contactName={`${currentLead.first_name} ${currentLead.last_name}`}
-          campaignId={campaignId} callAttemptId={lastCallAttemptId} contactAddress={currentLead.address} contactCity={currentLead.city}
-          contactState={currentLead.state} contactZip={currentLead.zip_code}
-          onClose={handleModalClose} onSaved={handleModalSaved} />
-      )}
+      {showAppointmentModal && (currentLead || manualMatchedContact) && (() => {
+        const lead = (currentLead || manualMatchedContact)!;
+        return (
+          <AppointmentModal
+            contactId={lead.contact_id}
+            contactName={`${lead.first_name} ${lead.last_name}`}
+            campaignId={campaignId}
+            callAttemptId={lastCallAttemptId}
+            contactAddress={lead.address}
+            contactCity={lead.city}
+            contactState={lead.state}
+            contactZip={lead.zip_code}
+            onClose={handleModalClose}
+            onSaved={handleModalSaved}
+          />
+        );
+      })()}
       {showTechApptModal && (currentLead || manualMatchedContact) && (() => {
         const lead = (currentLead || manualMatchedContact)!;
         const addr = [lead.address, lead.city, lead.state, lead.zip_code].filter(Boolean).join(", ");
