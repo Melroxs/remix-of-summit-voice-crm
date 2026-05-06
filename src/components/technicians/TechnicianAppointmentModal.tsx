@@ -121,6 +121,13 @@ export default function TechnicianAppointmentModal({
   interface AvailabilityInfo {
     prev: { id: string; address: string | null; end: Date; travelMin: number | null } | null;
     next: { id: string; address: string | null; start: Date; travelMin: number | null } | null;
+    overlap: {
+      id: string;
+      address: string | null;
+      start: Date;
+      end: Date;
+      travelMin: number | null;
+    } | null;
     originLabel: "previous appointment" | "home address" | null;
     originAddress: string | null;
     travelInMin: number | null; // drive into the new job
@@ -272,9 +279,25 @@ export default function TechnicianAppointmentModal({
         (a) => a.start < endDt && a.end > startDt,
       );
       if (overlap) {
+        const originAddress =
+          selectedTech.home_address?.trim() || null;
+        const overlapDriveMin = overlap.address
+          ? await getTravelTime(
+              originAddress || leadAddress.trim(),
+              overlap.address.trim(),
+            )
+          : null;
+        if (cancelled) return;
         setAvail({
           prev: null,
           next: null,
+          overlap: {
+            id: overlap.id,
+            address: overlap.address,
+            start: overlap.start,
+            end: overlap.end,
+            travelMin: overlapDriveMin,
+          },
           originLabel: null,
           originAddress: null,
           travelInMin: null,
@@ -336,6 +359,7 @@ export default function TechnicianAppointmentModal({
         next: next
           ? { id: next.id, address: next.address, start: next.start, travelMin: travelOutMin }
           : null,
+        overlap: null,
         originLabel,
         originAddress,
         travelInMin,
