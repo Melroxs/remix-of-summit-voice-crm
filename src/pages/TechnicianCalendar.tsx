@@ -44,6 +44,8 @@ const statusColor: Record<string, string> = {
 export default function TechnicianCalendar() {
   const { role } = useAuth();
   const isClient = role === "client";
+  const isTechnician = role === "technician";
+  const readOnly = isClient || isTechnician;
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [techModalOpen, setTechModalOpen] = useState(false);
   const [editingTech, setEditingTech] = useState<Technician | null>(null);
@@ -104,14 +106,18 @@ export default function TechnicianCalendar() {
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Technician Calendar</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isTechnician ? "My Calendar" : "Technician Calendar"}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {isClient
               ? "View scheduled on-site technician visits for your campaigns."
+              : isTechnician
+              ? "Full day view of your scheduled jobs and appointments."
               : "Schedule on-site technicians and track field appointments."}
           </p>
         </div>
-        {!isClient && <div className="flex gap-2">
+        {!readOnly && <div className="flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
@@ -168,7 +174,7 @@ export default function TechnicianCalendar() {
           <p className="text-muted-foreground mb-4">
             {isClient ? "No technicians configured yet." : "No active technicians yet."}
           </p>
-          {!isClient && (
+          {!readOnly && (
             <Button onClick={() => { setEditingTech(null); setTechModalOpen(true); }}>
               <UserPlus className="w-4 h-4 mr-1.5" /> Add your first technician
             </Button>
@@ -213,7 +219,7 @@ export default function TechnicianCalendar() {
                         </div>
                       )}
                     </div>
-                    {!isClient && (
+                    {!readOnly && (
                       <button
                         onClick={() => openEditTech(tech)}
                         className="text-muted-foreground hover:text-foreground"
@@ -226,10 +232,10 @@ export default function TechnicianCalendar() {
 
                   {/* Time grid */}
                   <div
-                    className={`relative ${isClient ? "" : "cursor-pointer"}`}
+                    className={`relative ${readOnly ? "" : "cursor-pointer"}`}
                     style={{ height: `${(HOUR_END - HOUR_START + 1) * SLOT_HEIGHT}px` }}
                     onClick={(e) => {
-                      if (isClient) return;
+                      if (readOnly) return;
                       if ((e.target as HTMLElement).closest("[data-appt]")) return;
                       openNewAppt(tech.id);
                     }}
@@ -245,8 +251,8 @@ export default function TechnicianCalendar() {
                       <div
                         key={a.id}
                         data-appt
-                        onClick={(e) => { e.stopPropagation(); if (!isClient) openEditAppt(a); }}
-                        className={`absolute left-1 right-1 rounded-md border px-1.5 py-1 overflow-hidden text-[11px] ${isClient ? "" : "cursor-pointer hover:opacity-90"} ${statusColor[a.status]}`}
+                        onClick={(e) => { e.stopPropagation(); if (!readOnly) openEditAppt(a); }}
+                        className={`absolute left-1 right-1 rounded-md border px-1.5 py-1 overflow-hidden text-[11px] ${readOnly ? "" : "cursor-pointer hover:opacity-90"} ${statusColor[a.status]}`}
                         style={blockStyle(a)}
                       >
                         <div className="font-semibold truncate">
