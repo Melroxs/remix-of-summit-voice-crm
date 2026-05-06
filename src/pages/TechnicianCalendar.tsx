@@ -11,11 +11,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { format, addDays, startOfDay, isSameDay } from "date-fns";
-import {
-  useTechnicians,
-  useDeleteTechnician,
-  type Technician,
-} from "@/hooks/use-technicians";
+import { useTechnicians, type Technician } from "@/hooks/use-technicians";
 import {
   useTechAppointments,
   type TechAppointment,
