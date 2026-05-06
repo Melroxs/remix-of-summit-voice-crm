@@ -94,6 +94,7 @@ export default function ClientPortal() {
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Resolve client's accessible campaigns
   useEffect(() => {
@@ -237,13 +238,17 @@ export default function ClientPortal() {
       }
       setLeadStatus(counts);
 
-      // Technician appointments — same company as the client's campaigns
+      // Technician appointments — past 7 days through next 30 days so clients
+      // see in-progress and recently completed visits, not just upcoming ones.
+      const techFromIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const techToIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       const { data: techAppointmentsData } = await supabase
         .from("technician_appointments")
         .select("id, start_time, end_time, status, lead_address, required_skill, notes, technician_id, contact_id, campaign_id")
-        .gte("start_time", new Date().toISOString())
+        .gte("start_time", techFromIso)
+        .lte("start_time", techToIso)
         .order("start_time", { ascending: true })
-        .limit(50);
+        .limit(100);
 
       const techIds = Array.from(new Set((techAppointmentsData || []).map((t) => t.technician_id)));
       const techContactIds = Array.from(new Set(
@@ -281,7 +286,23 @@ export default function ClientPortal() {
       setLoading(false);
     };
     fetchAll();
-  }, [campaignIds, selectedCampaign, range, campaigns]);
+  }, [campaignIds, selectedCampaign, range, campaigns, reloadKey]);
+
+  // Realtime: refresh when technicians update appointment status
+  useEffect(() => {
+    if (campaignIds.length === 0) return;
+    const channel = supabase
+      .channel("client-tech-appts")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "technician_appointments" },
+        () => setReloadKey((k) => k + 1),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [campaignIds]);
 
   const getSecureUrl = async (id: string) => {
     const { data, error } = await supabase.functions.invoke("get-recording-url", {
