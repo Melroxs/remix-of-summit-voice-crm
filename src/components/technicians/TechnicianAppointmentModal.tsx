@@ -25,6 +25,7 @@ import { CalendarIcon, Search } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { getTravelTime } from "@/lib/routing";
 import {
   useSaveTechAppointment,
   useDeleteTechAppointment,
@@ -115,6 +116,13 @@ export default function TechnicianAppointmentModal({
   const [leadSearch, setLeadSearch] = useState("");
   const [leadResults, setLeadResults] = useState<ContactLite[]>([]);
   const [searchingLeads, setSearchingLeads] = useState(false);
+
+  // Travel time estimate (minutes) from technician's previous stop of the day
+  const [travelMinutes, setTravelMinutes] = useState<number | null>(null);
+  const [travelOrigin, setTravelOrigin] = useState<string | null>(null);
+  const [travelOriginType, setTravelOriginType] = useState<"home" | "previous_appointment" | null>(null);
+  const [travelLoading, setTravelLoading] = useState(false);
+  const [travelError, setTravelError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -209,6 +217,66 @@ export default function TechnicianAppointmentModal({
 
   const startDt = useMemo(() => combineDateTime(startDate, startTime), [startDate, startTime]);
   const endDt = useMemo(() => combineDateTime(endDate, endTime), [endDate, endTime]);
+
+  // Compute origin (last appointment of the day before this one, else technician's home address)
+  // and call OSRM to get travel time.
+  useEffect(() => {
+    let cancelled = false;
+    const compute = async () => {
+      setTravelMinutes(null);
+      setTravelOrigin(null);
+      setTravelOriginType(null);
+      setTravelError(null);
+      if (!selectedTech || !startDt || !leadAddress.trim()) return;
+
+      // Day window
+      const dayStart = new Date(startDt);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(startDt);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      // Find the latest appointment for this technician on the same day that ends at/before our start time
+      let q = supabase
+        .from("technician_appointments")
+        .select("id, lead_address, start_time, end_time")
+        .eq("technician_id", selectedTech.id)
+        .gte("start_time", dayStart.toISOString())
+        .lte("start_time", dayEnd.toISOString())
+        .lte("end_time", startDt.toISOString())
+        .order("end_time", { ascending: false })
+        .limit(1);
+      if (appointment?.id) q = q.neq("id", appointment.id);
+
+      const { data: prev } = await q;
+      const prevAppt = prev?.[0];
+      const origin = prevAppt?.lead_address?.trim() || selectedTech.home_address?.trim() || "";
+      const originType: "home" | "previous_appointment" | null = prevAppt?.lead_address
+        ? "previous_appointment"
+        : selectedTech.home_address
+          ? "home"
+          : null;
+
+      if (!origin) {
+        setTravelError("No origin (technician home address not set)");
+        return;
+      }
+      if (cancelled) return;
+
+      setTravelOrigin(origin);
+      setTravelOriginType(originType);
+      setTravelLoading(true);
+      const minutes = await getTravelTime(origin, leadAddress.trim());
+      if (cancelled) return;
+      setTravelLoading(false);
+      if (minutes == null) {
+        setTravelError("Could not calculate travel time for these addresses");
+      } else {
+        setTravelMinutes(minutes);
+      }
+    };
+    compute();
+    return () => { cancelled = true; };
+  }, [selectedTech, startDt?.getTime(), leadAddress, appointment?.id]);
 
   const validation = useMemo(() => {
     if (!selectedTech || !startDt || !endDt) return null;
@@ -463,6 +531,36 @@ export default function TechnicianAppointmentModal({
           </div>
           {validation && (
             <p className="text-sm text-destructive">{validation}</p>
+          )}
+
+          {/* Travel time estimate */}
+          {selectedTech && leadAddress.trim() && (
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-xs space-y-1">
+              <div className="font-medium text-foreground">Travel estimate</div>
+              {travelLoading ? (
+                <div className="text-muted-foreground">Calculating route…</div>
+              ) : travelError ? (
+                <div className="text-muted-foreground">{travelError}</div>
+              ) : travelMinutes != null ? (
+                <>
+                  <div className="text-foreground">
+                    ~{travelMinutes} min drive from{" "}
+                    {travelOriginType === "previous_appointment" ? "previous appointment" : "home address"}
+                  </div>
+                  <div className="text-muted-foreground truncate" title={travelOrigin ?? ""}>
+                    From: {travelOrigin}
+                  </div>
+                  {startDt && (
+                    <div className="text-muted-foreground">
+                      Suggested depart by:{" "}
+                      {format(new Date(startDt.getTime() - travelMinutes * 60_000), "MMM d, HH:mm")}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-muted-foreground">Pick a technician, date/time, and lead address.</div>
+              )}
+            </div>
           )}
         </div>
         <DialogFooter className="gap-2">
