@@ -428,7 +428,8 @@ export default function Reports() {
   }, [calls, appointments, profiles]);
 
   const handleExport = () => {
-    exportToCsv(`reports-${range.from.toISOString().slice(0,10)}-to-${range.to.toISOString().slice(0,10)}`, agentTable, [
+    const stamp = `${range.from.toISOString().slice(0,10)}-to-${range.to.toISOString().slice(0,10)}`;
+    exportToCsv(`reports-agents-${stamp}`, agentTable, [
       { key: "agent", label: "Agent" },
       { key: "attempts", label: "Dial Attempts" },
       { key: "connects", label: "Connects" },
@@ -436,6 +437,21 @@ export default function Reports() {
       { key: "connectRate", label: "Connect Rate %" },
       { key: "bookingRate", label: "Booking Rate %" },
       { key: "talkTime", label: "Talk Time (s)" },
+    ]);
+    exportToCsv(`reports-appointment-history-${stamp}`, appointmentHistory.map((a) => ({
+      type: a.type,
+      scheduled_for: new Date(a.when).toISOString(),
+      created_at: new Date(a.created_at).toISOString(),
+      status: a.status,
+      campaign: a.campaign,
+      assignee: a.who,
+    })), [
+      { key: "type", label: "Type" },
+      { key: "scheduled_for", label: "Scheduled For" },
+      { key: "created_at", label: "Booked On" },
+      { key: "status", label: "Status" },
+      { key: "campaign", label: "Campaign" },
+      { key: "assignee", label: "Agent / Technician" },
     ]);
   };
 
