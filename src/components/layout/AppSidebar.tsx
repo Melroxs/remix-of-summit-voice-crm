@@ -49,6 +49,7 @@ const allNavItems: NavItem[] = [
   { to: "/callbacks", icon: CalendarClock, label: "Callbacks", roles: ["admin", "agent"] },
   { to: "/appointments", icon: CalendarCheck, label: "Appointments", roles: ["admin", "agent", "team_leader"] },
   { to: "/technicians", icon: Wrench, label: "Technicians", roles: ["admin", "manager", "team_leader", "agent", "client"] },
+  { to: "/technician-dashboard", icon: Wrench, label: "My Schedule", roles: ["technician"] },
   { to: "/tasks", icon: ListTodo, label: "Follow-ups", roles: ["admin", "agent", "team_leader"] },
   { to: "/training", icon: GraduationCap, label: "Training Hub", roles: ["admin", "agent", "team_leader"] },
   { to: "/recordings", icon: Disc3, label: "Recordings", roles: ["admin"] },
