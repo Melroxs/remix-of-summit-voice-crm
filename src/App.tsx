@@ -105,7 +105,7 @@ const App = () => (
                   <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><Appointments /></RoleGuard>
                 } />
                 <Route path="/technicians" element={
-                  <RoleGuard allowedRoles={["admin", "manager", "team_leader"]}><TechnicianCalendar /></RoleGuard>
+                  <RoleGuard allowedRoles={["admin", "manager", "team_leader", "agent", "client"]}><TechnicianCalendar /></RoleGuard>
                 } />
                 <Route path="/tasks" element={
                   <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><FollowUpTasks /></RoleGuard>
