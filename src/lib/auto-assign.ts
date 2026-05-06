@@ -24,6 +24,112 @@ function parseHM(s: string): [number, number] {
 }
 
 /**
+ * Build all valid time slots on a given working day for one technician
+ * where the new job (durationMinutes at leadAddress) can fit, accounting for
+ * travel time from the previous location AND travel time to the next
+ * appointment's location.
+ */
+async function buildDayValidSlots(
+  tech: Technician,
+  dayBusy: BusyBlock[],
+  wStart: Date,
+  wEnd: Date,
+  leadAddress: string,
+  durationMinutes: number,
+): Promise<
+  Array<{
+    start: Date;
+    end: Date;
+    prevEnd: Date | null;
+    prevAddress: string | null;
+    travelInMin: number | null;
+  }>
+> {
+  const out: Array<{
+    start: Date;
+    end: Date;
+    prevEnd: Date | null;
+    prevAddress: string | null;
+    travelInMin: number | null;
+  }> = [];
+
+  const now = new Date();
+  let prevEndTime: Date = wStart;
+  let prevLocation: string | null = tech.home_address?.trim() || null;
+  let prevEndRef: Date | null = null;
+
+  const sorted = [...dayBusy].sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  // Try the gap before each existing appointment
+  for (const appt of sorted) {
+    const travelToNew = prevLocation
+      ? await getTravelTime(prevLocation, leadAddress)
+      : 0;
+    const travelToNext = appt.address
+      ? await getTravelTime(leadAddress, appt.address)
+      : 0;
+
+    let earliestStart = new Date(
+      prevEndTime.getTime() + (travelToNew ?? 0) * 60000,
+    );
+    if (earliestStart < now) earliestStart = new Date(now);
+    // round up to next 15 min
+    const mins = earliestStart.getMinutes();
+    earliestStart.setMinutes(Math.ceil(mins / 15) * 15, 0, 0);
+
+    const latestEnd = new Date(
+      appt.start.getTime() - (travelToNext ?? 0) * 60000,
+    );
+    const possibleEnd = new Date(
+      earliestStart.getTime() + durationMinutes * 60000,
+    );
+
+    if (
+      earliestStart >= wStart &&
+      possibleEnd <= latestEnd &&
+      possibleEnd <= wEnd
+    ) {
+      out.push({
+        start: earliestStart,
+        end: possibleEnd,
+        prevEnd: prevEndRef,
+        prevAddress: prevLocation,
+        travelInMin: travelToNew,
+      });
+    }
+
+    prevEndTime = appt.end;
+    prevLocation = appt.address?.trim() || prevLocation;
+    prevEndRef = appt.end;
+  }
+
+  // Slot after the last appointment (or full day if none)
+  const travelToNew = prevLocation
+    ? await getTravelTime(prevLocation, leadAddress)
+    : 0;
+  let earliestStart = new Date(
+    prevEndTime.getTime() + (travelToNew ?? 0) * 60000,
+  );
+  if (earliestStart < now) earliestStart = new Date(now);
+  const mins = earliestStart.getMinutes();
+  earliestStart.setMinutes(Math.ceil(mins / 15) * 15, 0, 0);
+  const possibleEnd = new Date(
+    earliestStart.getTime() + durationMinutes * 60000,
+  );
+  if (earliestStart >= wStart && possibleEnd <= wEnd) {
+    out.push({
+      start: earliestStart,
+      end: possibleEnd,
+      prevEnd: prevEndRef,
+      prevAddress: prevLocation,
+      travelInMin: travelToNew,
+    });
+  }
+
+  return out;
+}
+
+/**
  * Find ranked technician/slot options for a job.
  * Searches `daysAhead` days starting from `fromDate` (default: now).
  * Returns up to `limit` options sorted by earliest start.
@@ -88,7 +194,7 @@ export async function findBestTechnicians(opts: {
     byTech.set(row.technician_id as string, arr);
   }
 
-  const candidates: Array<Omit<RankedSlot, "travelInMin"> & { travelInMin: number | null }> = [];
+  const candidates: RankedSlot[] = [];
 
   for (const tech of techs) {
     const busy = (byTech.get(tech.id) ?? []).sort(
@@ -107,79 +213,37 @@ export async function findBestTechnicians(opts: {
       const wEnd = new Date(day);
       wEnd.setHours(whEH, whEM, 0, 0);
 
-      const dayBusy = busy.filter(
-        (b) => b.end > wStart && b.start < wEnd,
+      const dayBusy = busy.filter((b) => b.end > wStart && b.start < wEnd);
+
+      const valid = await buildDayValidSlots(
+        tech,
+        dayBusy,
+        wStart,
+        wEnd,
+        lead,
+        durationMinutes,
       );
 
-      // Build gaps
-      type Gap = { start: Date; end: Date; prev: BusyBlock | null };
-      const gaps: Gap[] = [];
-      let cursor = wStart;
-      let prev: BusyBlock | null = null;
-      for (const b of dayBusy) {
-        if (b.start > cursor) {
-          gaps.push({ start: cursor, end: b.start < wEnd ? b.start : wEnd, prev });
-        }
-        if (b.end > cursor) cursor = b.end;
-        prev = b;
-      }
-      if (cursor < wEnd) gaps.push({ start: cursor, end: wEnd, prev });
-
-      const now = new Date();
-      for (const g of gaps) {
-        let s = new Date(g.start);
-        if (s < now) s = new Date(now);
-        // round up to next 15 min
-        const mins = s.getMinutes();
-        const rounded = Math.ceil(mins / 15) * 15;
-        s.setMinutes(rounded, 0, 0);
-        if (s.getTime() + durationMinutes * 60000 > g.end.getTime()) continue;
-
-        const e = new Date(s.getTime() + durationMinutes * 60000);
-
-        const originAddress =
-          g.prev?.address?.trim() || tech.home_address?.trim() || null;
-        const originLabel: RankedSlot["originLabel"] = g.prev?.address
-          ? "previous appointment"
-          : tech.home_address
-            ? "home address"
-            : "none";
-
+      if (valid.length > 0) {
+        const first = valid[0];
         candidates.push({
           technician: tech,
-          start: s,
-          end: e,
-          travelInMin: null,
-          originLabel,
-          originAddress,
-          prevEnd: g.prev?.end ?? null,
+          start: first.start,
+          end: first.end,
+          travelInMin: first.travelInMin,
+          originLabel: first.prevEnd
+            ? "previous appointment"
+            : tech.home_address
+              ? "home address"
+              : "none",
+          originAddress: first.prevAddress,
+          prevEnd: first.prevEnd,
         });
-        // Only need earliest per tech to rank globally
-        break;
+        break; // first available day for this tech
       }
-
-      // Stop once we have one slot for this tech today; continue only if we want more
-      // Keep first available across days for this tech
-      if (candidates.some((c) => c.technician.id === tech.id)) break;
     }
   }
 
-  // Compute travel times in parallel
-  await Promise.all(
-    candidates.map(async (c) => {
-      if (c.originAddress) {
-        c.travelInMin = await getTravelTime(c.originAddress, lead);
-      }
-    }),
-  );
-
-  // Filter out slots where travel time doesn't fit before start
-  const valid = candidates.filter((c) => {
-    if (c.travelInMin == null || !c.prevEnd) return true;
-    const gapMin = (c.start.getTime() - c.prevEnd.getTime()) / 60000;
-    return c.travelInMin <= gapMin;
-  });
-
-  valid.sort((a, b) => a.start.getTime() - b.start.getTime());
-  return valid.slice(0, limit);
+  candidates.sort((a, b) => a.start.getTime() - b.start.getTime());
+  return candidates.slice(0, limit);
 }
