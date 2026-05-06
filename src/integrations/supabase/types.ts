@@ -1991,10 +1991,13 @@ export type Database = {
           created_at: string
           email: string | null
           home_address: string | null
+          home_lat: number | null
+          home_lng: number | null
           id: string
           is_active: boolean
           name: string
           phone: string | null
+          service_areas: string[]
           skills: string[]
           updated_at: string
           user_id: string | null
@@ -2007,10 +2010,13 @@ export type Database = {
           created_at?: string
           email?: string | null
           home_address?: string | null
+          home_lat?: number | null
+          home_lng?: number | null
           id?: string
           is_active?: boolean
           name: string
           phone?: string | null
+          service_areas?: string[]
           skills?: string[]
           updated_at?: string
           user_id?: string | null
@@ -2023,10 +2029,13 @@ export type Database = {
           created_at?: string
           email?: string | null
           home_address?: string | null
+          home_lat?: number | null
+          home_lng?: number | null
           id?: string
           is_active?: boolean
           name?: string
           phone?: string | null
+          service_areas?: string[]
           skills?: string[]
           updated_at?: string
           user_id?: string | null
