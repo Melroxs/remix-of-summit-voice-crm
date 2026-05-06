@@ -18,6 +18,14 @@ import {
 } from "@/hooks/use-technician-appointments";
 import TechnicianModal from "@/components/technicians/TechnicianModal";
 import TechnicianAppointmentModal from "@/components/technicians/TechnicianAppointmentModal";
+import ManageTechniciansModal from "@/components/technicians/ManageTechniciansModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown, Users } from "lucide-react";
 
 const HOUR_START = 7;
 const HOUR_END = 19;
@@ -39,6 +47,7 @@ export default function TechnicianCalendar() {
   const [apptModalOpen, setApptModalOpen] = useState(false);
   const [editingAppt, setEditingAppt] = useState<TechAppointment | null>(null);
   const [defaultTechId, setDefaultTechId] = useState<string | undefined>();
+  const [manageOpen, setManageOpen] = useState(false);
 
   const { data: technicians = [], isLoading: loadingTechs } = useTechnicians();
   const dayStart = useMemo(() => startOfDay(date).toISOString(), [date]);
@@ -98,9 +107,27 @@ export default function TechnicianCalendar() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setEditingTech(null); setTechModalOpen(true); }}>
-            <UserPlus className="w-4 h-4 mr-1.5" /> Technician
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <UserPlus className="w-4 h-4 mr-1.5" /> Add Technician
+                <ChevronDown className="w-3.5 h-3.5 ml-1.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEditingTech(null);
+                  setTechModalOpen(true);
+                }}
+              >
+                <UserPlus className="w-4 h-4 mr-2" /> New Technician
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setManageOpen(true)}>
+                <Users className="w-4 h-4 mr-2" /> Manage Technicians
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button onClick={() => openNewAppt()}>
             <Plus className="w-4 h-4 mr-1.5" /> Appointment
           </Button>
@@ -240,6 +267,18 @@ export default function TechnicianCalendar() {
         appointment={editingAppt}
         defaultDate={date}
         defaultTechnicianId={defaultTechId}
+      />
+      <ManageTechniciansModal
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        onEdit={(t) => {
+          setEditingTech(t);
+          setTechModalOpen(true);
+        }}
+        onAdd={() => {
+          setEditingTech(null);
+          setTechModalOpen(true);
+        }}
       />
     </div>
   );
