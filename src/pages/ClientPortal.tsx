@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Phone, CalendarClock, TrendingUp, Users, BarChart3, Disc3, Play, Square, Sparkles,
+  Wrench, MapPin, Clock,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useRef } from "react";
@@ -45,6 +46,20 @@ interface RecordingRow {
   campaign_name: string | null;
 }
 
+interface TechApptRow {
+  id: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  lead_address: string | null;
+  required_skill: string | null;
+  notes: string | null;
+  technician_name: string;
+  technician_phone: string | null;
+  contact_name: string | null;
+  campaign_name: string | null;
+}
+
 const CONNECTED = new Set([
   "connected", "appointment_booked", "callback_scheduled",
   "not_interested", "dnc_request", "already_customer", "wrong_number",
@@ -75,6 +90,7 @@ export default function ClientPortal() {
   const [summaries, setSummaries] = useState<SummaryRow[]>([]);
   const [recordings, setRecordings] = useState<RecordingRow[]>([]);
   const [leadStatus, setLeadStatus] = useState<Record<string, number>>({});
+  const [techAppts, setTechAppts] = useState<TechApptRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -220,6 +236,47 @@ export default function ClientPortal() {
         counts[s] = (counts[s] || 0) + 1;
       }
       setLeadStatus(counts);
+
+      // Technician appointments — same company as the client's campaigns
+      const { data: techAppointmentsData } = await supabase
+        .from("technician_appointments")
+        .select("id, start_time, end_time, status, lead_address, required_skill, notes, technician_id, contact_id, campaign_id")
+        .gte("start_time", new Date().toISOString())
+        .order("start_time", { ascending: true })
+        .limit(50);
+
+      const techIds = Array.from(new Set((techAppointmentsData || []).map((t) => t.technician_id)));
+      const techContactIds = Array.from(new Set(
+        (techAppointmentsData || []).map((t) => t.contact_id).filter(Boolean) as string[],
+      ));
+      const [{ data: techData }, { data: techContacts }] = await Promise.all([
+        techIds.length
+          ? supabase.from("technicians").select("id, name, phone").in("id", techIds)
+          : Promise.resolve({ data: [] as { id: string; name: string; phone: string | null }[] }),
+        techContactIds.length
+          ? supabase.from("contacts").select("id, first_name, last_name").in("id", techContactIds)
+          : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string }[] }),
+      ]);
+      const tMap = new Map((techData || []).map((t) => [t.id, t]));
+      const tcMap = new Map((techContacts || []).map((c) => [c.id, `${c.first_name} ${c.last_name}`]));
+
+      // Restrict to client's accessible campaigns (or unassigned-to-campaign rows in same company)
+      const allowedCampaignIds = new Set(ids);
+      setTechAppts((techAppointmentsData || [])
+        .filter((t) => !t.campaign_id || allowedCampaignIds.has(t.campaign_id))
+        .map((t) => ({
+          id: t.id,
+          start_time: t.start_time,
+          end_time: t.end_time,
+          status: t.status,
+          lead_address: t.lead_address,
+          required_skill: t.required_skill,
+          notes: t.notes,
+          technician_name: tMap.get(t.technician_id)?.name || "Unknown",
+          technician_phone: tMap.get(t.technician_id)?.phone || null,
+          contact_name: t.contact_id ? tcMap.get(t.contact_id) || null : null,
+          campaign_name: t.campaign_id ? campMap.get(t.campaign_id) || null : null,
+        })));
 
       setLoading(false);
     };
