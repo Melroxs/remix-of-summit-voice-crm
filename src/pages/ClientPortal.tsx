@@ -237,13 +237,17 @@ export default function ClientPortal() {
       }
       setLeadStatus(counts);
 
-      // Technician appointments — same company as the client's campaigns
+      // Technician appointments — past 7 days through next 30 days so clients
+      // see in-progress and recently completed visits, not just upcoming ones.
+      const techFromIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const techToIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       const { data: techAppointmentsData } = await supabase
         .from("technician_appointments")
         .select("id, start_time, end_time, status, lead_address, required_skill, notes, technician_id, contact_id, campaign_id")
-        .gte("start_time", new Date().toISOString())
+        .gte("start_time", techFromIso)
+        .lte("start_time", techToIso)
         .order("start_time", { ascending: true })
-        .limit(50);
+        .limit(100);
 
       const techIds = Array.from(new Set((techAppointmentsData || []).map((t) => t.technician_id)));
       const techContactIds = Array.from(new Set(
