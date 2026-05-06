@@ -489,6 +489,61 @@ export default function ClientPortal() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
+            <Wrench className="w-5 h-5" />
+            Technician scheduled appointments
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
+          ) : techAppts.length === 0 ? (
+            <EmptyState icon={Wrench} title="No technician visits scheduled" description="Field-technician appointments scheduled for your campaigns will appear here." />
+          ) : (
+            <div className="space-y-2">
+              {techAppts.map((t) => (
+                <div key={t.id} className="p-3 bg-muted/40 rounded-lg">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">
+                        <Wrench className="w-3.5 h-3.5 text-primary" />
+                        {t.technician_name}
+                        {t.technician_phone && <span className="text-xs text-muted-foreground font-normal">• {t.technician_phone}</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Clock className="w-3 h-3" />
+                        {format(new Date(t.start_time), "EEE MMM d, h:mm a")} – {format(new Date(t.end_time), "h:mm a")}
+                      </p>
+                      {t.contact_name && (
+                        <p className="text-xs text-foreground/80 mt-0.5">Lead: {t.contact_name}</p>
+                      )}
+                      {t.lead_address && (
+                        <p className="text-xs text-muted-foreground/80 truncate flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3" />{t.lead_address}
+                        </p>
+                      )}
+                      {t.required_skill && (
+                        <p className="text-xs text-muted-foreground mt-0.5">Skill: {t.required_skill}</p>
+                      )}
+                      {t.campaign_name && (
+                        <p className="text-xs text-muted-foreground mt-0.5">Campaign: {t.campaign_name}</p>
+                      )}
+                      {t.notes && (
+                        <p className="text-xs text-foreground/70 mt-1 line-clamp-2">{t.notes}</p>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="text-xs shrink-0 capitalize">{t.status.replace(/_/g, " ")}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Recordings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
             <Disc3 className="w-5 h-5" />
             Call recordings
           </CardTitle>
