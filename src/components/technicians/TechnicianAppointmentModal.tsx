@@ -40,6 +40,10 @@ interface Props {
   appointment?: TechAppointment | null;
   defaultDate?: Date;
   defaultTechnicianId?: string;
+  defaultContactId?: string | null;
+  defaultContactLabel?: string;
+  defaultLeadAddress?: string;
+  defaultCampaignId?: string | null;
 }
 
 const STATUSES: TechApptStatus[] = [
@@ -87,6 +91,10 @@ export default function TechnicianAppointmentModal({
   appointment,
   defaultDate,
   defaultTechnicianId,
+  defaultContactId,
+  defaultContactLabel,
+  defaultLeadAddress,
+  defaultCampaignId,
 }: Props) {
   const { data: technicians = [] } = useTechnicians();
   const save = useSaveTechAppointment();
@@ -131,14 +139,14 @@ export default function TechnicianAppointmentModal({
       setStartTime("09:00");
       setEndDate(base);
       setEndTime("10:00");
-      setLeadAddress("");
+      setLeadAddress(defaultLeadAddress ?? "");
       setRequiredSkill("");
       setStatus("scheduled");
       setNotes("");
-      setContactId(null);
-      setContactLabel("");
+      setContactId(defaultContactId ?? null);
+      setContactLabel(defaultContactLabel ?? "");
     }
-  }, [open, appointment, defaultDate, defaultTechnicianId]);
+  }, [open, appointment, defaultDate, defaultTechnicianId, defaultContactId, defaultContactLabel, defaultLeadAddress]);
 
   // Hydrate previously-linked contact details when editing
   useEffect(() => {
@@ -242,7 +250,7 @@ export default function TechnicianAppointmentModal({
       id: appointment?.id,
       technician_id: technicianId,
       contact_id: contactId,
-      campaign_id: appointment?.campaign_id ?? null,
+      campaign_id: appointment?.campaign_id ?? defaultCampaignId ?? null,
       appointment_id: appointment?.appointment_id ?? null,
       lead_address: leadAddress.trim() || null,
       start_time: startDt.toISOString(),
