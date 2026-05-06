@@ -12,6 +12,7 @@ import {
   SkipForward, Loader2, Wifi, WifiOff,
   AlertTriangle, Zap, StopCircle, Timer,
 } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useDialerQueue } from "@/hooks/use-dialer-queue";
 import { useTelnyx } from "@/hooks/use-telnyx";
@@ -25,6 +26,7 @@ import DispositionPanel from "@/components/dialer/DispositionPanel";
 import CallbackModal from "@/components/dialer/CallbackModal";
 import AppointmentModal from "@/components/dialer/AppointmentModal";
 import WrapUpModal from "@/components/dialer/WrapUpModal";
+import TechnicianAppointmentModal from "@/components/technicians/TechnicianAppointmentModal";
 import DialPad from "@/components/dialer/DialPad";
 import AudioControls from "@/components/dialer/AudioControls";
 import DtmfPad from "@/components/dialer/DtmfPad";
@@ -42,6 +44,7 @@ export default function Dialer() {
   const [callTimer, setCallTimer] = useState(0);
   const [showCallbackModal, setShowCallbackModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showTechApptModal, setShowTechApptModal] = useState(false);
   const [pendingDisposition, setPendingDisposition] = useState<string | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [showWrapUp, setShowWrapUp] = useState(false);
@@ -553,6 +556,16 @@ export default function Dialer() {
 
           <AudioControls muted={muted} held={held} onToggleMute={toggleMute} onToggleHold={toggleHold} callActive={callState === "active"} />
           <DtmfPad onSend={sendDTMF} disabled={callState !== "active"} />
+          {(currentLead || manualMatchedContact) && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setShowTechApptModal(true)}
+            >
+              <CalendarPlus className="w-4 h-4 mr-2" />
+              Schedule Technician Appointment
+            </Button>
+          )}
           {!manualCallActive && <DispositionPanel disabled={!currentLead} onDispose={handleDispose} />}
         </div>
 
@@ -585,6 +598,20 @@ export default function Dialer() {
           contactState={currentLead.state} contactZip={currentLead.zip_code}
           onClose={handleModalClose} onSaved={handleModalSaved} />
       )}
+      {showTechApptModal && (currentLead || manualMatchedContact) && (() => {
+        const lead = (currentLead || manualMatchedContact)!;
+        const addr = [lead.address, lead.city, lead.state, lead.zip_code].filter(Boolean).join(", ");
+        return (
+          <TechnicianAppointmentModal
+            open={showTechApptModal}
+            onOpenChange={setShowTechApptModal}
+            defaultContactId={lead.contact_id}
+            defaultContactLabel={`${lead.first_name} ${lead.last_name}`.trim()}
+            defaultLeadAddress={addr}
+            defaultCampaignId={campaignId}
+          />
+        );
+      })()}
       {showWrapUp && currentLead && (
         <WrapUpModal
           open={showWrapUp}
