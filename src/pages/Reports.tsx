@@ -486,6 +486,10 @@ export default function Reports() {
         <StatCard label="Recordings available" value={`${metrics.recordingRate.toFixed(0)}%`} icon={Disc3} loading={loading} hint={`${metrics.recordingsAvailable} of ${metrics.totalAttempts}`} />
         <StatCard label="Active agents" value={new Set(calls.map((c) => c.agent_id).filter(Boolean)).size} icon={Users} loading={loading} />
         <StatCard label="Total talk time" value={fmtDuration(calls.reduce((s, c) => s + (c.duration_seconds || 0), 0))} icon={TrendingUp} loading={loading} />
+        <StatCard label="Tech visits" value={techAppts.length.toLocaleString()} icon={Wrench} loading={loading} accent="primary" hint={`${techAppts.filter(t => t.status === "completed").length} completed`} />
+        <StatCard label="Tech no-shows" value={techAppts.filter(t => t.status === "no_show").length.toLocaleString()} icon={XCircle} loading={loading} accent="destructive" />
+        <StatCard label="Follow-ups" value={followUpStats.total.toLocaleString()} icon={ClipboardList} loading={loading} hint={`${followUpStats.overdue} overdue`} accent={followUpStats.overdue > 0 ? "warning" : "default"} />
+        <StatCard label="Follow-up completion" value={`${followUpStats.completionRate.toFixed(0)}%`} icon={CheckCircle2} loading={loading} accent="success" hint={`${followUpStats.completed}/${followUpStats.total}`} />
       </div>
 
       {/* Daily trend */}
