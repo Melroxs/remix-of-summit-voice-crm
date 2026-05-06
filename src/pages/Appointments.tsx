@@ -69,21 +69,34 @@ export default function Appointments() {
       supabase
         .from("technician_appointments")
         .select(
-          "id, technician_id, contact_id, campaign_id, lead_address, start_time, end_time, status, notes, technicians(name), contacts(first_name,last_name,phone_e164), campaigns(name)"
+          "id, technician_id, contact_id, campaign_id, lead_address, start_time, end_time, status, notes, technicians(name)"
         )
         .order("start_time", { ascending: true }),
     ]);
     const sales: Appointment[] = ((salesRes.data as unknown as Appointment[]) ?? []).map(
       (a) => ({ ...a, source: "sales" }),
     );
-    const tech: Appointment[] = ((techRes.data as unknown as Array<{
+    const techRows = (techRes.data as unknown as Array<{
       id: string; technician_id: string; contact_id: string | null; campaign_id: string | null;
       lead_address: string | null; start_time: string; end_time: string; status: string;
       notes: string | null;
       technicians?: { name: string } | null;
-      contacts?: { first_name: string; last_name: string; phone_e164: string | null } | null;
-      campaigns?: { name: string } | null;
-    }>) ?? []).map((t) => ({
+    }>) ?? [];
+
+    const contactIds = Array.from(new Set(techRows.map((t) => t.contact_id).filter(Boolean) as string[]));
+    const campaignIds = Array.from(new Set(techRows.map((t) => t.campaign_id).filter(Boolean) as string[]));
+    const [contactsRes, campaignsRes] = await Promise.all([
+      contactIds.length
+        ? supabase.from("contacts").select("id, first_name, last_name, phone_e164").in("id", contactIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string; phone_e164: string | null }> }),
+      campaignIds.length
+        ? supabase.from("campaigns").select("id, name").in("id", campaignIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    ]);
+    const contactMap = new Map((contactsRes.data ?? []).map((c) => [c.id, c]));
+    const campaignMap = new Map((campaignsRes.data ?? []).map((c) => [c.id, c]));
+
+    const tech: Appointment[] = techRows.map((t) => ({
       id: t.id,
       appointment_at: t.start_time,
       end_at: t.end_time,
@@ -94,8 +107,10 @@ export default function Appointments() {
       contact_id: t.contact_id ?? "",
       agent_id: null,
       campaign_id: t.campaign_id,
-      contacts: t.contacts ?? null,
-      campaigns: t.campaigns ?? null,
+      contacts: t.contact_id
+        ? (contactMap.get(t.contact_id) as { first_name: string; last_name: string; phone_e164: string | null } | undefined) ?? null
+        : null,
+      campaigns: t.campaign_id ? campaignMap.get(t.campaign_id) ?? null : null,
       source: "technician",
       technician_name: t.technicians?.name ?? null,
     }));
