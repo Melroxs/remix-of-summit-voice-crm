@@ -33,6 +33,7 @@ const DialerScripts = lazy(() => import("@/pages/DialerScripts"));
 const TrainingHub = lazy(() => import("@/pages/TrainingHub"));
 const FollowUpTasks = lazy(() => import("@/pages/FollowUpTasks"));
 const TechnicianCalendar = lazy(() => import("@/pages/TechnicianCalendar"));
+const TechnicianDashboard = lazy(() => import("@/pages/TechnicianDashboard"));
 
 const queryClient = new QueryClient();
 
@@ -64,6 +65,7 @@ function RoleRedirect() {
 
   if (role === "client") return <Navigate to="/client-portal" replace />;
   if (role === "team_leader") return <Navigate to="/team-dashboard" replace />;
+  if (role === "technician") return <Navigate to="/technician-dashboard" replace />;
   return <Dashboard />;
 }
 
@@ -105,7 +107,10 @@ const App = () => (
                   <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><Appointments /></RoleGuard>
                 } />
                 <Route path="/technicians" element={
-                  <RoleGuard allowedRoles={["admin", "manager", "team_leader", "agent", "client"]}><TechnicianCalendar /></RoleGuard>
+                  <RoleGuard allowedRoles={["admin", "manager", "team_leader", "agent", "client", "technician"]}><TechnicianCalendar /></RoleGuard>
+                } />
+                <Route path="/technician-dashboard" element={
+                  <RoleGuard allowedRoles={["admin", "manager", "technician"]}><TechnicianDashboard /></RoleGuard>
                 } />
                 <Route path="/tasks" element={
                   <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><FollowUpTasks /></RoleGuard>
