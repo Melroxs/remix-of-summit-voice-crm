@@ -2333,7 +2333,13 @@ export type Database = {
         | "lunch"
         | "tea"
         | "bathroom_break"
-      app_role: "admin" | "manager" | "agent" | "client" | "team_leader"
+      app_role:
+        | "admin"
+        | "manager"
+        | "agent"
+        | "client"
+        | "team_leader"
+        | "technician"
       appointment_status:
         | "booked"
         | "confirmed"
@@ -2561,7 +2567,14 @@ export const Constants = {
         "tea",
         "bathroom_break",
       ],
-      app_role: ["admin", "manager", "agent", "client", "team_leader"],
+      app_role: [
+        "admin",
+        "manager",
+        "agent",
+        "client",
+        "team_leader",
+        "technician",
+      ],
       appointment_status: [
         "booked",
         "confirmed",
