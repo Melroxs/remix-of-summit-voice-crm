@@ -139,6 +139,9 @@ export default function TechnicianAppointmentModal({
   const [avail, setAvail] = useState<AvailabilityInfo | null>(null);
   const [availLoading, setAvailLoading] = useState(false);
   const [availError, setAvailError] = useState<string | null>(null);
+  const [daySorted, setDaySorted] = useState<
+    { id: string; start: Date; end: Date }[]
+  >([]);
 
   useEffect(() => {
     if (!open) return;
@@ -274,6 +277,8 @@ export default function TechnicianAppointmentModal({
         }))
         .sort((a, b) => a.start.getTime() - b.start.getTime());
 
+      setDaySorted(sorted.map((s) => ({ id: s.id, start: s.start, end: s.end })));
+
         // Direct overlap with any existing appointment
       const overlap = sorted.find(
         (a) => a.start < endDt && a.end > startDt,
@@ -397,6 +402,73 @@ export default function TechnicianAppointmentModal({
   }, [selectedTech, startDt, endDt, requiredSkill]);
 
   const blockingError = validation || avail?.conflict || null;
+
+  // Suggest next available time slots within the technician's working hours
+  // for the chosen date, respecting existing appointments and the proposed duration.
+  const suggestions = useMemo(() => {
+    if (!selectedTech || !startDate) return [] as { start: Date; end: Date }[];
+    const durationMin =
+      startDt && endDt && endDt > startDt
+        ? Math.round((endDt.getTime() - startDt.getTime()) / 60000)
+        : 60;
+    if (durationMin <= 0) return [];
+
+    const day = new Date(startDate);
+    if (!selectedTech.working_days.includes(day.getDay())) return [];
+
+    const [whSH, whSM] = selectedTech.working_hours_start.split(":").map(Number);
+    const [whEH, whEM] = selectedTech.working_hours_end.split(":").map(Number);
+    const dayStart = new Date(day);
+    dayStart.setHours(whSH, whSM, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(whEH, whEM, 0, 0);
+
+    const busy = daySorted
+      .map((b) => ({ start: b.start, end: b.end }))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    // Build free gaps within working hours
+    const gaps: { start: Date; end: Date }[] = [];
+    let cursor = dayStart;
+    for (const b of busy) {
+      if (b.end <= cursor) continue;
+      if (b.start >= dayEnd) break;
+      if (b.start > cursor) gaps.push({ start: cursor, end: b.start < dayEnd ? b.start : dayEnd });
+      if (b.end > cursor) cursor = b.end;
+    }
+    if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+
+    // Round candidate start to next 15-min and emit slots that fit duration
+    const out: { start: Date; end: Date }[] = [];
+    const now = new Date();
+    for (const g of gaps) {
+      let s = new Date(g.start);
+      // never suggest past times for today
+      if (s < now && day.toDateString() === now.toDateString()) s = new Date(now);
+      const minutes = s.getMinutes();
+      const rounded = Math.ceil(minutes / 15) * 15;
+      s.setMinutes(rounded, 0, 0);
+      while (s.getTime() + durationMin * 60000 <= g.end.getTime()) {
+        const e = new Date(s.getTime() + durationMin * 60000);
+        out.push({ start: new Date(s), end: e });
+        if (out.length >= 5) break;
+        s = new Date(s.getTime() + 30 * 60000);
+      }
+      if (out.length >= 5) break;
+    }
+    return out;
+  }, [selectedTech, startDate, daySorted, startDt, endDt]);
+
+  const applySuggestion = (s: { start: Date; end: Date }) => {
+    setStartDate(s.start);
+    setEndDate(s.end);
+    setStartTime(
+      `${String(s.start.getHours()).padStart(2, "0")}:${String(s.start.getMinutes()).padStart(2, "0")}`,
+    );
+    setEndTime(
+      `${String(s.end.getHours()).padStart(2, "0")}:${String(s.end.getMinutes()).padStart(2, "0")}`,
+    );
+  };
 
   const submit = async () => {
     if (!technicianId) {
@@ -709,6 +781,32 @@ export default function TechnicianAppointmentModal({
                   {!avail.overlap && !avail.next && !avail.prev && (
                     <div className="text-muted-foreground">
                       No other appointments scheduled this day.
+                    </div>
+                  )}
+                  {/* Next available slot suggestions */}
+                  {(avail.conflict || suggestions.length > 0) && (
+                    <div className="pt-2 border-t border-border/50 space-y-1">
+                      <div className="text-foreground font-medium">
+                        Next available slots
+                      </div>
+                      {suggestions.length === 0 ? (
+                        <div className="text-muted-foreground">
+                          No openings in working hours for this duration.
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {suggestions.map((s) => (
+                            <button
+                              key={s.start.toISOString()}
+                              type="button"
+                              onClick={() => applySuggestion(s)}
+                              className="px-2 py-1 rounded border border-border bg-background hover:bg-accent text-foreground text-xs"
+                            >
+                              {format(s.start, "HH:mm")}–{format(s.end, "HH:mm")}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
