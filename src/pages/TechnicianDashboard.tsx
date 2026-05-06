@@ -149,11 +149,11 @@ export default function TechnicianDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+    <div className="space-y-4 sm:space-y-6 px-1 sm:px-0">
+      <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Technician Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Technician Dashboard</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             Field schedule, appointment details, and status updates.
           </p>
         </div>
@@ -162,7 +162,7 @@ export default function TechnicianDashboard() {
             value={activeTech?.id ?? ""}
             onValueChange={(v) => setSelectedTechId(v)}
           >
-            <SelectTrigger className="w-[240px]">
+            <SelectTrigger className="w-full sm:w-[240px]">
               <SelectValue placeholder="Select technician" />
             </SelectTrigger>
             <SelectContent>
@@ -180,8 +180,8 @@ export default function TechnicianDashboard() {
         <>
           {/* Technician profile */}
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2 flex-wrap">
                 <Wrench className="w-5 h-5 text-primary" />
                 {activeTech.name}
                 {!activeTech.is_active && (
@@ -191,23 +191,23 @@ export default function TechnicianDashboard() {
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
               <div className="space-y-2">
                 {activeTech.phone && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <a href={`tel:${activeTech.phone}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary">
                     <Phone className="w-4 h-4" />
                     <span>{activeTech.phone}</span>
-                  </div>
+                  </a>
                 )}
                 {activeTech.email && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <a href={`mailto:${activeTech.email}`} className="flex items-center gap-2 text-muted-foreground hover:text-primary break-all">
                     <Mail className="w-4 h-4" />
                     <span>{activeTech.email}</span>
-                  </div>
+                  </a>
                 )}
                 {activeTech.home_address && (
                   <div className="flex items-start gap-2 text-muted-foreground">
-                    <MapPin className="w-4 h-4 mt-0.5" />
+                    <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
                     <span>{activeTech.home_address}</span>
                   </div>
                 )}
@@ -233,7 +233,7 @@ export default function TechnicianDashboard() {
           </Card>
 
           {/* KPI tiles */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
             <StatTile icon={CalendarDays} label="Today" value={stats.today} />
             <StatTile icon={Clock} label="Pending" value={stats.pending} />
             <StatTile icon={Navigation} label="Upcoming (7d)" value={stats.upcoming} />
@@ -280,14 +280,14 @@ function StatTile({
   value: number;
 }) {
   return (
-    <Card className="p-4">
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-md bg-primary/10 text-primary">
+    <Card className="p-3 sm:p-4">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="p-1.5 sm:p-2 rounded-md bg-primary/10 text-primary shrink-0">
           <Icon className="w-4 h-4" />
         </div>
-        <div>
-          <div className="text-2xl font-bold">{value}</div>
-          <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="min-w-0">
+          <div className="text-xl sm:text-2xl font-bold">{value}</div>
+          <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{label}</div>
         </div>
       </div>
     </Card>
@@ -309,10 +309,10 @@ function ApptList({
 }) {
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-3">
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 sm:px-6">
         {appts.length === 0 ? (
           <p className="text-sm text-muted-foreground">{emptyText}</p>
         ) : (
@@ -320,7 +320,7 @@ function ApptList({
             {appts.map((a) => (
               <div
                 key={a.id}
-                className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-3 rounded-md border border-border bg-muted/20"
+                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 rounded-md border border-border bg-muted/20"
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -338,8 +338,9 @@ function ApptList({
                     )}
                   </div>
                   {a.lead_address && (
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
-                      <MapPin className="w-3 h-3" /> {a.lead_address}
+                    <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1">
+                      <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                      <span className="break-words">{a.lead_address}</span>
                     </div>
                   )}
                   {a.notes && (
@@ -347,11 +348,12 @@ function ApptList({
                   )}
                 </div>
                 {!readOnly && (
-                  <div className="flex gap-2 items-center">
+                  <div className="flex gap-2 items-center flex-wrap sm:flex-nowrap w-full sm:w-auto">
                     {a.lead_address && (
                       <Button
                         size="sm"
                         variant="outline"
+                        className="flex-1 sm:flex-none"
                         asChild
                       >
                         <a
@@ -368,7 +370,7 @@ function ApptList({
                       value={a.status}
                       onValueChange={(v) => onUpdateStatus(a.id, v)}
                     >
-                      <SelectTrigger className="w-[140px] h-8 text-xs">
+                      <SelectTrigger className="flex-1 sm:flex-none sm:w-[140px] h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
