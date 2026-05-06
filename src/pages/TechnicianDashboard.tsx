@@ -16,6 +16,10 @@ import {
   Phone,
   Mail,
   Navigation,
+  User,
+  Briefcase,
+  AlertCircle,
+  Megaphone,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +48,32 @@ interface TechAppt {
   notes: string | null;
   contact_id: string | null;
   campaign_id: string | null;
+  appointment_id: string | null;
+  contact?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    phone_e164: string | null;
+    email: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+    timezone: string | null;
+  } | null;
+  appointment?: {
+    id: string;
+    appointment_at: string;
+    appointment_type: string;
+    job_type: string | null;
+    urgency: string;
+    notes: string | null;
+    address: string | null;
+    city: string | null;
+    state: string | null;
+    zip_code: string | null;
+  } | null;
+  campaign?: { id: string; name: string } | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -87,13 +117,38 @@ export default function TechnicianDashboard() {
     queryKey: ["tech-dash-appts", activeTech?.id],
     enabled: !!activeTech?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: base, error: baseErr } = await supabase
         .from("technician_appointments")
         .select("*")
         .eq("technician_id", activeTech!.id)
         .order("start_time", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as TechAppt[];
+      if (baseErr) throw baseErr;
+
+      const contactIds = Array.from(new Set((base ?? []).map((a) => a.contact_id).filter(Boolean) as string[]));
+      const apptIds = Array.from(new Set((base ?? []).map((a) => a.appointment_id).filter(Boolean) as string[]));
+      const campIds = Array.from(new Set((base ?? []).map((a) => a.campaign_id).filter(Boolean) as string[]));
+
+      const [contactsRes, apptsRes, campsRes] = await Promise.all([
+        contactIds.length
+          ? supabase.from("contacts").select("id, first_name, last_name, phone_e164, email, address, city, state, zip_code, timezone").in("id", contactIds)
+          : Promise.resolve({ data: [] as any[] }),
+        apptIds.length
+          ? supabase.from("appointments").select("id, appointment_at, appointment_type, job_type, urgency, notes, address, city, state, zip_code").in("id", apptIds)
+          : Promise.resolve({ data: [] as any[] }),
+        campIds.length
+          ? supabase.from("campaigns").select("id, name").in("id", campIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const cMap = new Map(((contactsRes.data ?? []) as any[]).map((c) => [c.id, c]));
+      const aMap = new Map(((apptsRes.data ?? []) as any[]).map((a) => [a.id, a]));
+      const kMap = new Map(((campsRes.data ?? []) as any[]).map((c) => [c.id, c]));
+
+      return (base ?? []).map((row: any) => ({
+        ...row,
+        contact: row.contact_id ? cMap.get(row.contact_id) ?? null : null,
+        appointment: row.appointment_id ? aMap.get(row.appointment_id) ?? null : null,
+        campaign: row.campaign_id ? kMap.get(row.campaign_id) ?? null : null,
+      })) as TechAppt[];
     },
   });
 
@@ -336,15 +391,83 @@ function ApptList({
                         {a.required_skill}
                       </Badge>
                     )}
+                    {a.appointment?.urgency && a.appointment.urgency !== "medium" && (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${
+                          a.appointment.urgency === "high" || a.appointment.urgency === "urgent"
+                            ? "bg-destructive/15 text-destructive border-destructive/30"
+                            : ""
+                        }`}
+                      >
+                        <AlertCircle className="w-3 h-3 mr-0.5" />
+                        {a.appointment.urgency}
+                      </Badge>
+                    )}
+                    {a.appointment?.appointment_type && (
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {a.appointment.appointment_type.replace(/_/g, " ")}
+                      </Badge>
+                    )}
                   </div>
+
+                  {/* Customer */}
+                  {a.contact && (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                        <User className="w-3.5 h-3.5 text-primary" />
+                        {a.contact.first_name} {a.contact.last_name}
+                      </div>
+                      {a.contact.phone_e164 && (
+                        <a
+                          href={`tel:${a.contact.phone_e164}`}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary"
+                        >
+                          <Phone className="w-3 h-3" />
+                          {a.contact.phone_e164}
+                        </a>
+                      )}
+                      {a.contact.email && (
+                        <a
+                          href={`mailto:${a.contact.email}`}
+                          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary break-all"
+                        >
+                          <Mail className="w-3 h-3" />
+                          {a.contact.email}
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Job type & campaign */}
+                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
+                    {a.appointment?.job_type && (
+                      <span className="flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" /> {a.appointment.job_type}
+                      </span>
+                    )}
+                    {a.campaign?.name && (
+                      <span className="flex items-center gap-1">
+                        <Megaphone className="w-3 h-3" /> {a.campaign.name}
+                      </span>
+                    )}
+                  </div>
+
                   {a.lead_address && (
                     <div className="flex items-start gap-1.5 text-xs text-muted-foreground mt-1">
                       <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
                       <span className="break-words">{a.lead_address}</span>
                     </div>
                   )}
-                  {a.notes && (
-                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{a.notes}</div>
+                  {(a.notes || a.appointment?.notes) && (
+                    <div className="text-xs text-muted-foreground mt-1.5 p-2 rounded bg-muted/30 border border-border/50">
+                      {a.notes && <div className="whitespace-pre-wrap">{a.notes}</div>}
+                      {a.appointment?.notes && a.appointment.notes !== a.notes && (
+                        <div className="whitespace-pre-wrap mt-1 italic">
+                          Sales note: {a.appointment.notes}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 {!readOnly && (
