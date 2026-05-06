@@ -557,14 +557,24 @@ export default function Dialer() {
           <AudioControls muted={muted} held={held} onToggleMute={toggleMute} onToggleHold={toggleHold} callActive={callState === "active"} />
           <DtmfPad onSend={sendDTMF} disabled={callState !== "active"} />
           {(currentLead || manualMatchedContact) && (
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setShowTechApptModal(true)}
-            >
-              <CalendarPlus className="w-4 h-4 mr-2" />
-              Schedule Technician Appointment
-            </Button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button
+                variant="default"
+                className="w-full"
+                onClick={() => setShowAppointmentModal(true)}
+              >
+                <CalendarPlus className="w-4 h-4 mr-2" />
+                Add Appointment
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowTechApptModal(true)}
+              >
+                <CalendarPlus className="w-4 h-4 mr-2" />
+                Schedule Technician
+              </Button>
+            </div>
           )}
           {!manualCallActive && <DispositionPanel disabled={!currentLead} onDispose={handleDispose} />}
         </div>
