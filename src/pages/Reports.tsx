@@ -657,6 +657,102 @@ export default function Reports() {
           )}
         </CardContent>
       </Card>
+
+      {/* Sales vs Technician appointment status */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><CalendarClock className="w-5 h-5" />Sales appointment status</CardTitle></CardHeader>
+          <CardContent>
+            {loading ? <Skeleton className="h-[260px] w-full" /> : apptStatusBreakdown.length === 0 ? (
+              <EmptyState icon={CalendarClock} title="No sales appointments yet" />
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={apptStatusBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+                    {apptStatusBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle className="text-lg flex items-center gap-2"><Wrench className="w-5 h-5" />Technician visit status</CardTitle></CardHeader>
+          <CardContent>
+            {loading ? <Skeleton className="h-[260px] w-full" /> : techStatusBreakdown.length === 0 ? (
+              <EmptyState icon={Wrench} title="No technician visits in range" />
+            ) : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={techStatusBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={90} paddingAngle={2}
+                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
+                    {techStatusBreakdown.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", color: "hsl(var(--foreground))" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Full appointment history */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <CalendarClock className="w-5 h-5" />
+            Appointment history ({appointmentHistory.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <Skeleton className="h-[300px] w-full" />
+          ) : appointmentHistory.length === 0 ? (
+            <EmptyState icon={CalendarClock} title="No appointments in range" description="Sales and technician appointments will appear here once booked." />
+          ) : (
+            <div className="max-h-[480px] overflow-y-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Scheduled for</TableHead>
+                    <TableHead>Booked on</TableHead>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Agent / Technician</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {appointmentHistory.slice(0, 200).map((a) => (
+                    <TableRow key={`${a.type}-${a.id}`}>
+                      <TableCell>
+                        <Badge variant="outline" className={a.type === "Technician" ? "text-purple-400 border-purple-400/30" : "text-primary border-primary/30"}>
+                          {a.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-medium">{new Date(a.when).toLocaleString()}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{new Date(a.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>{a.campaign}</TableCell>
+                      <TableCell>{a.who}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="capitalize">{a.status.replace(/_/g, " ")}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {appointmentHistory.length > 200 && (
+                <p className="text-xs text-muted-foreground text-center mt-3">
+                  Showing first 200 of {appointmentHistory.length}. Export CSV for the full list.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
