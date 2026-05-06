@@ -196,11 +196,27 @@ export default function TechnicianAppointmentModal({
     setSearchingLeads(true);
     const term = leadSearch.trim();
     const run = async () => {
+      // Find contact IDs that are already scheduled in technician_appointments
+      // (excluding cancelled/no_show, and excluding the current appointment when editing)
+      let scheduledQ = supabase
+        .from("technician_appointments")
+        .select("contact_id")
+        .not("contact_id", "is", null)
+        .not("status", "in", "(cancelled,no_show)");
+      if (appointment?.id) scheduledQ = scheduledQ.neq("id", appointment.id);
+      const { data: scheduledRows } = await scheduledQ;
+      const scheduledIds = Array.from(
+        new Set((scheduledRows ?? []).map((r) => r.contact_id as string).filter(Boolean)),
+      );
+
       let q = supabase
         .from("contacts")
         .select("id, first_name, last_name, phone_e164, address, city, state, zip_code")
         .order("updated_at", { ascending: false })
         .limit(25);
+      if (scheduledIds.length > 0) {
+        q = q.not("id", "in", `(${scheduledIds.join(",")})`);
+      }
       if (term) {
         const s = term.replace(/[,()]/g, " ");
         q = q.or(
@@ -215,7 +231,7 @@ export default function TechnicianAppointmentModal({
     };
     const t = setTimeout(run, 200);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [leadSearch, leadPickerOpen]);
+  }, [leadSearch, leadPickerOpen, appointment?.id]);
 
   const pickLead = (c: ContactLite) => {
     setContactId(c.id);
