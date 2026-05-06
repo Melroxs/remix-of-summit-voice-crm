@@ -1923,6 +1923,119 @@ export type Database = {
         }
         Relationships: []
       }
+      technician_appointments: {
+        Row: {
+          appointment_id: string | null
+          campaign_id: string | null
+          company_id: string
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          end_time: string
+          id: string
+          lead_address: string | null
+          notes: string | null
+          required_skill: string | null
+          start_time: string
+          status: Database["public"]["Enums"]["technician_appointment_status"]
+          technician_id: string
+          updated_at: string
+        }
+        Insert: {
+          appointment_id?: string | null
+          campaign_id?: string | null
+          company_id: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_time: string
+          id?: string
+          lead_address?: string | null
+          notes?: string | null
+          required_skill?: string | null
+          start_time: string
+          status?: Database["public"]["Enums"]["technician_appointment_status"]
+          technician_id: string
+          updated_at?: string
+        }
+        Update: {
+          appointment_id?: string | null
+          campaign_id?: string | null
+          company_id?: string
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          end_time?: string
+          id?: string
+          lead_address?: string | null
+          notes?: string | null
+          required_skill?: string | null
+          start_time?: string
+          status?: Database["public"]["Enums"]["technician_appointment_status"]
+          technician_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_appointments_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "technicians"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technicians: {
+        Row: {
+          company_id: string
+          created_at: string
+          email: string | null
+          home_address: string | null
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          skills: string[]
+          updated_at: string
+          user_id: string | null
+          working_days: number[]
+          working_hours_end: string
+          working_hours_start: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          email?: string | null
+          home_address?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          skills?: string[]
+          updated_at?: string
+          user_id?: string | null
+          working_days?: number[]
+          working_hours_end?: string
+          working_hours_start?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          email?: string | null
+          home_address?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          skills?: string[]
+          updated_at?: string
+          user_id?: string | null
+          working_days?: number[]
+          working_hours_end?: string
+          working_hours_start?: string
+        }
+        Relationships: []
+      }
       telephony_providers: {
         Row: {
           created_at: string
@@ -2286,6 +2399,13 @@ export type Database = {
         | "blocked"
       phone_type: "mobile" | "home" | "work" | "other"
       priority_band: "hot" | "warm" | "medium" | "low" | "excluded"
+      technician_appointment_status:
+        | "scheduled"
+        | "en_route"
+        | "on_site"
+        | "completed"
+        | "cancelled"
+        | "no_show"
       training_material_type:
         | "script"
         | "objection"
@@ -2515,6 +2635,14 @@ export const Constants = {
       ],
       phone_type: ["mobile", "home", "work", "other"],
       priority_band: ["hot", "warm", "medium", "low", "excluded"],
+      technician_appointment_status: [
+        "scheduled",
+        "en_route",
+        "on_site",
+        "completed",
+        "cancelled",
+        "no_show",
+      ],
       training_material_type: [
         "script",
         "objection",
