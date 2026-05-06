@@ -44,6 +44,8 @@ const statusColor: Record<string, string> = {
 export default function TechnicianCalendar() {
   const { role } = useAuth();
   const isClient = role === "client";
+  const isTechnician = role === "technician";
+  const readOnly = isClient || isTechnician;
   const [date, setDate] = useState(() => startOfDay(new Date()));
   const [techModalOpen, setTechModalOpen] = useState(false);
   const [editingTech, setEditingTech] = useState<Technician | null>(null);
@@ -104,14 +106,18 @@ export default function TechnicianCalendar() {
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Technician Calendar</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {isTechnician ? "My Calendar" : "Technician Calendar"}
+          </h1>
           <p className="text-sm text-muted-foreground">
             {isClient
               ? "View scheduled on-site technician visits for your campaigns."
+              : isTechnician
+              ? "Full day view of your scheduled jobs and appointments."
               : "Schedule on-site technicians and track field appointments."}
           </p>
         </div>
-        {!isClient && <div className="flex gap-2">
+        {!readOnly && <div className="flex gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline">
