@@ -113,55 +113,38 @@ export default function TechnicianDashboard() {
     queryKey: ["tech-dash-appts", activeTech?.id],
     enabled: !!activeTech?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: base, error: baseErr } = await supabase
         .from("technician_appointments")
-        .select(`
-          *,
-          contact:contacts!technician_appointments_contact_id_fkey (
-            id, first_name, last_name, phone_e164, email,
-            address, city, state, zip_code, timezone
-          ),
-          appointment:appointments!technician_appointments_appointment_id_fkey (
-            id, appointment_at, appointment_type, job_type, urgency, notes,
-            address, city, state, zip_code
-          ),
-          campaign:campaigns!technician_appointments_campaign_id_fkey ( id, name )
-        `)
+        .select("*")
         .eq("technician_id", activeTech!.id)
         .order("start_time", { ascending: true });
-      if (error) {
-        // Fallback if FK names differ — fetch base row + manual joins
-        const { data: base, error: baseErr } = await supabase
-          .from("technician_appointments")
-          .select("*")
-          .eq("technician_id", activeTech!.id)
-          .order("start_time", { ascending: true });
-        if (baseErr) throw baseErr;
-        const contactIds = Array.from(new Set((base ?? []).map((a) => a.contact_id).filter(Boolean) as string[]));
-        const apptIds = Array.from(new Set((base ?? []).map((a) => a.appointment_id).filter(Boolean) as string[]));
-        const campIds = Array.from(new Set((base ?? []).map((a) => a.campaign_id).filter(Boolean) as string[]));
-        const [{ data: contacts }, { data: appts }, { data: camps }] = await Promise.all([
-          contactIds.length
-            ? supabase.from("contacts").select("id, first_name, last_name, phone_e164, email, address, city, state, zip_code, timezone").in("id", contactIds)
-            : Promise.resolve({ data: [] as any[] }),
-          apptIds.length
-            ? supabase.from("appointments").select("id, appointment_at, appointment_type, job_type, urgency, notes, address, city, state, zip_code").in("id", apptIds)
-            : Promise.resolve({ data: [] as any[] }),
-          campIds.length
-            ? supabase.from("campaigns").select("id, name").in("id", campIds)
-            : Promise.resolve({ data: [] as any[] }),
-        ]);
-        const cMap = new Map((contacts ?? []).map((c: any) => [c.id, c]));
-        const aMap = new Map((appts ?? []).map((a: any) => [a.id, a]));
-        const kMap = new Map((camps ?? []).map((c: any) => [c.id, c]));
-        return (base ?? []).map((row: any) => ({
-          ...row,
-          contact: row.contact_id ? cMap.get(row.contact_id) ?? null : null,
-          appointment: row.appointment_id ? aMap.get(row.appointment_id) ?? null : null,
-          campaign: row.campaign_id ? kMap.get(row.campaign_id) ?? null : null,
-        })) as TechAppt[];
-      }
-      return (data ?? []) as TechAppt[];
+      if (baseErr) throw baseErr;
+
+      const contactIds = Array.from(new Set((base ?? []).map((a) => a.contact_id).filter(Boolean) as string[]));
+      const apptIds = Array.from(new Set((base ?? []).map((a) => a.appointment_id).filter(Boolean) as string[]));
+      const campIds = Array.from(new Set((base ?? []).map((a) => a.campaign_id).filter(Boolean) as string[]));
+
+      const [contactsRes, apptsRes, campsRes] = await Promise.all([
+        contactIds.length
+          ? supabase.from("contacts").select("id, first_name, last_name, phone_e164, email, address, city, state, zip_code, timezone").in("id", contactIds)
+          : Promise.resolve({ data: [] as any[] }),
+        apptIds.length
+          ? supabase.from("appointments").select("id, appointment_at, appointment_type, job_type, urgency, notes, address, city, state, zip_code").in("id", apptIds)
+          : Promise.resolve({ data: [] as any[] }),
+        campIds.length
+          ? supabase.from("campaigns").select("id, name").in("id", campIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const cMap = new Map(((contactsRes.data ?? []) as any[]).map((c) => [c.id, c]));
+      const aMap = new Map(((apptsRes.data ?? []) as any[]).map((a) => [a.id, a]));
+      const kMap = new Map(((campsRes.data ?? []) as any[]).map((c) => [c.id, c]));
+
+      return (base ?? []).map((row: any) => ({
+        ...row,
+        contact: row.contact_id ? cMap.get(row.contact_id) ?? null : null,
+        appointment: row.appointment_id ? aMap.get(row.appointment_id) ?? null : null,
+        campaign: row.campaign_id ? kMap.get(row.campaign_id) ?? null : null,
+      })) as TechAppt[];
     },
   });
 
