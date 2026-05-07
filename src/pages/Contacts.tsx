@@ -38,6 +38,22 @@ export default function Contacts() {
   const [ownershipFilter, setOwnershipFilter] = useState<string>("all"); // all | locked | unlocked
   const [agents, setAgents] = useState<Record<string, string>>({}); // user_id -> display_name
 
+  // Advanced filters
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [cityFilter, setCityFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [zipFilter, setZipFilter] = useState("");
+  const [countyFilter, setCountyFilter] = useState("");
+  const [areaCodeFilter, setAreaCodeFilter] = useState("");
+  const [ownerRenterFilter, setOwnerRenterFilter] = useState("all");
+  const [creditFilter, setCreditFilter] = useState("");
+  const [homeValueFilter, setHomeValueFilter] = useState("");
+  const [householdIncomeFilter, setHouseholdIncomeFilter] = useState("");
+  const [createdFromFilter, setCreatedFromFilter] = useState("");
+  const [createdToFilter, setCreatedToFilter] = useState("");
+  const [importBatchFilter, setImportBatchFilter] = useState<string>("all");
+  const [importBatches, setImportBatches] = useState<{ id: string; filename: string }[]>([]);
+
   // Per-contact ops data (attempts, last_call, next_callback) keyed by contact_id
   const [opsData, setOpsData] = useState<Record<string, { attempts: number; last_called_at: string | null; next_callback_at: string | null }>>({});
 
@@ -73,6 +89,40 @@ export default function Contacts() {
     } else if (ownershipFilter === "unlocked") {
       query = query.is("locked_to_agent_id", null);
       countQuery = countQuery.is("locked_to_agent_id", null);
+    }
+    const applyText = (col: string, val: string) => {
+      if (!val.trim()) return;
+      query = query.ilike(col, `%${val.trim()}%`);
+      countQuery = countQuery.ilike(col, `%${val.trim()}%`);
+    };
+    applyText("city", cityFilter);
+    applyText("state", stateFilter);
+    applyText("zip_code", zipFilter);
+    applyText("county", countyFilter);
+    applyText("credit_rating", creditFilter);
+    applyText("home_value", homeValueFilter);
+    applyText("household_income", householdIncomeFilter);
+    if (areaCodeFilter.trim()) {
+      const ac = areaCodeFilter.replace(/\D/g, "");
+      const pat = `+1${ac}%`;
+      query = query.ilike("phone_e164", pat);
+      countQuery = countQuery.ilike("phone_e164", pat);
+    }
+    if (ownerRenterFilter !== "all") {
+      query = query.eq("owner_renter", ownerRenterFilter);
+      countQuery = countQuery.eq("owner_renter", ownerRenterFilter);
+    }
+    if (createdFromFilter) {
+      query = query.gte("created_at", createdFromFilter);
+      countQuery = countQuery.gte("created_at", createdFromFilter);
+    }
+    if (createdToFilter) {
+      query = query.lte("created_at", createdToFilter);
+      countQuery = countQuery.lte("created_at", createdToFilter);
+    }
+    if (importBatchFilter !== "all") {
+      query = query.eq("lead_import_id", importBatchFilter);
+      countQuery = countQuery.eq("lead_import_id", importBatchFilter);
     }
     if (campaignFilter !== "all") {
       const { data: links } = await supabase
@@ -132,13 +182,25 @@ export default function Contacts() {
       setOpsData({});
     }
     setLoading(false);
-  }, [search, page, statusFilter, campaignFilter, ownershipFilter]);
+  }, [
+    search, page, statusFilter, campaignFilter, ownershipFilter,
+    cityFilter, stateFilter, zipFilter, countyFilter, areaCodeFilter,
+    ownerRenterFilter, creditFilter, homeValueFilter, householdIncomeFilter,
+    createdFromFilter, createdToFilter, importBatchFilter,
+  ]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
-  useEffect(() => { setPage(0); }, [search, statusFilter, campaignFilter, ownershipFilter]);
+  useEffect(() => { setPage(0); }, [
+    search, statusFilter, campaignFilter, ownershipFilter,
+    cityFilter, stateFilter, zipFilter, countyFilter, areaCodeFilter,
+    ownerRenterFilter, creditFilter, homeValueFilter, householdIncomeFilter,
+    createdFromFilter, createdToFilter, importBatchFilter,
+  ]);
 
   useEffect(() => {
     supabase.from("campaigns").select("id, name").order("name").then(({ data }) => setCampaigns(data || []));
+    supabase.from("lead_imports").select("id, filename").order("created_at", { ascending: false }).limit(100)
+      .then(({ data }) => setImportBatches((data as any) || []));
   }, []);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
