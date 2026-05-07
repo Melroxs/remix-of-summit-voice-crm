@@ -189,7 +189,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
     audioRef.current?.pause();
     setPlayingId(recId);
     try {
-      const { data } = await supabase.functions.invoke("get-recording-url", { body: { call_recording_id: recId } });
+      const { data } = await supabase.functions.invoke("telnyx-recording-url", { body: { call_recording_id: recId } });
       if (!data?.url) { setPlayingId(null); return; }
       const audio = new Audio(data.url);
       audio.play();
@@ -330,7 +330,7 @@ export default function ContactActivityTimeline({ contactId }: Props) {
                           </span>
                         )}
                         <button onClick={async () => {
-                          const { data } = await supabase.functions.invoke("get-recording-url", { body: { call_recording_id: entry.recording!.id } });
+                          const { data } = await supabase.functions.invoke("telnyx-recording-url", { body: { call_recording_id: entry.recording!.id } });
                           if (data?.url) window.open(data.url, "_blank");
                         }} className="text-muted-foreground hover:text-foreground ml-auto" title="Download">
                           <Disc3 className="w-2.5 h-2.5" />
