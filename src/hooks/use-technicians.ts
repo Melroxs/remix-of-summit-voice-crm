@@ -16,9 +16,6 @@ export interface Technician {
   working_hours_end: string;
   working_days: number[];
   is_active: boolean;
-  home_lat: number | null;
-  home_lng: number | null;
-  service_areas: string[];
 }
 
 export type TechnicianInput = Omit<Technician, "id" | "company_id"> & { id?: string };
@@ -56,9 +53,6 @@ export function useSaveTechnician() {
         is_active: input.is_active,
         user_id: input.user_id,
         company_id,
-        home_lat: input.home_lat,
-        home_lng: input.home_lng,
-        service_areas: input.service_areas ?? [],
       };
       if (input.id) {
         const { error } = await supabase.from("technicians").update(payload).eq("id", input.id);

@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Phone, CalendarClock, TrendingUp, Users, BarChart3, Disc3, Play, Square, Sparkles,
-  Wrench, MapPin, Clock,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useRef } from "react";
@@ -46,20 +45,6 @@ interface RecordingRow {
   campaign_name: string | null;
 }
 
-interface TechApptRow {
-  id: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  lead_address: string | null;
-  required_skill: string | null;
-  notes: string | null;
-  technician_name: string;
-  technician_phone: string | null;
-  contact_name: string | null;
-  campaign_name: string | null;
-}
-
 const CONNECTED = new Set([
   "connected", "appointment_booked", "callback_scheduled",
   "not_interested", "dnc_request", "already_customer", "wrong_number",
@@ -90,11 +75,9 @@ export default function ClientPortal() {
   const [summaries, setSummaries] = useState<SummaryRow[]>([]);
   const [recordings, setRecordings] = useState<RecordingRow[]>([]);
   const [leadStatus, setLeadStatus] = useState<Record<string, number>>({});
-  const [techAppts, setTechAppts] = useState<TechApptRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
 
   // Resolve client's accessible campaigns
   useEffect(() => {
@@ -238,71 +221,10 @@ export default function ClientPortal() {
       }
       setLeadStatus(counts);
 
-      // Technician appointments — past 7 days through next 30 days so clients
-      // see in-progress and recently completed visits, not just upcoming ones.
-      const techFromIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const techToIso = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { data: techAppointmentsData } = await supabase
-        .from("technician_appointments")
-        .select("id, start_time, end_time, status, lead_address, required_skill, notes, technician_id, contact_id, campaign_id")
-        .gte("start_time", techFromIso)
-        .lte("start_time", techToIso)
-        .order("start_time", { ascending: true })
-        .limit(100);
-
-      const techIds = Array.from(new Set((techAppointmentsData || []).map((t) => t.technician_id)));
-      const techContactIds = Array.from(new Set(
-        (techAppointmentsData || []).map((t) => t.contact_id).filter(Boolean) as string[],
-      ));
-      const [{ data: techData }, { data: techContacts }] = await Promise.all([
-        techIds.length
-          ? supabase.from("technicians").select("id, name, phone").in("id", techIds)
-          : Promise.resolve({ data: [] as { id: string; name: string; phone: string | null }[] }),
-        techContactIds.length
-          ? supabase.from("contacts").select("id, first_name, last_name").in("id", techContactIds)
-          : Promise.resolve({ data: [] as { id: string; first_name: string; last_name: string }[] }),
-      ]);
-      const tMap = new Map((techData || []).map((t) => [t.id, t]));
-      const tcMap = new Map((techContacts || []).map((c) => [c.id, `${c.first_name} ${c.last_name}`]));
-
-      // Restrict to client's accessible campaigns (or unassigned-to-campaign rows in same company)
-      const allowedCampaignIds = new Set(ids);
-      setTechAppts((techAppointmentsData || [])
-        .filter((t) => !t.campaign_id || allowedCampaignIds.has(t.campaign_id))
-        .map((t) => ({
-          id: t.id,
-          start_time: t.start_time,
-          end_time: t.end_time,
-          status: t.status,
-          lead_address: t.lead_address,
-          required_skill: t.required_skill,
-          notes: t.notes,
-          technician_name: tMap.get(t.technician_id)?.name || "Unknown",
-          technician_phone: tMap.get(t.technician_id)?.phone || null,
-          contact_name: t.contact_id ? tcMap.get(t.contact_id) || null : null,
-          campaign_name: t.campaign_id ? campMap.get(t.campaign_id) || null : null,
-        })));
-
       setLoading(false);
     };
     fetchAll();
-  }, [campaignIds, selectedCampaign, range, campaigns, reloadKey]);
-
-  // Realtime: refresh when technicians update appointment status
-  useEffect(() => {
-    if (campaignIds.length === 0) return;
-    const channel = supabase
-      .channel("client-tech-appts")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "technician_appointments" },
-        () => setReloadKey((k) => k + 1),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [campaignIds]);
+  }, [campaignIds, selectedCampaign, range, campaigns]);
 
   const getSecureUrl = async (id: string) => {
     const { data, error } = await supabase.functions.invoke("get-recording-url", {
@@ -499,61 +421,6 @@ export default function ClientPortal() {
                       <span className="font-medium text-foreground">Next:</span> {s.recommended_action}
                     </p>
                   )}
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recordings */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Wrench className="w-5 h-5" />
-            Technician scheduled appointments
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
-          ) : techAppts.length === 0 ? (
-            <EmptyState icon={Wrench} title="No technician visits scheduled" description="Field-technician appointments scheduled for your campaigns will appear here." />
-          ) : (
-            <div className="space-y-2">
-              {techAppts.map((t) => (
-                <div key={t.id} className="p-3 bg-muted/40 rounded-lg">
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm text-foreground truncate flex items-center gap-1.5">
-                        <Wrench className="w-3.5 h-3.5 text-primary" />
-                        {t.technician_name}
-                        {t.technician_phone && <span className="text-xs text-muted-foreground font-normal">• {t.technician_phone}</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Clock className="w-3 h-3" />
-                        {format(new Date(t.start_time), "EEE MMM d, h:mm a")} – {format(new Date(t.end_time), "h:mm a")}
-                      </p>
-                      {t.contact_name && (
-                        <p className="text-xs text-foreground/80 mt-0.5">Lead: {t.contact_name}</p>
-                      )}
-                      {t.lead_address && (
-                        <p className="text-xs text-muted-foreground/80 truncate flex items-center gap-1 mt-0.5">
-                          <MapPin className="w-3 h-3" />{t.lead_address}
-                        </p>
-                      )}
-                      {t.required_skill && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Skill: {t.required_skill}</p>
-                      )}
-                      {t.campaign_name && (
-                        <p className="text-xs text-muted-foreground mt-0.5">Campaign: {t.campaign_name}</p>
-                      )}
-                      {t.notes && (
-                        <p className="text-xs text-foreground/70 mt-1 line-clamp-2">{t.notes}</p>
-                      )}
-                    </div>
-                    <Badge variant="outline" className="text-xs shrink-0 capitalize">{t.status.replace(/_/g, " ")}</Badge>
-                  </div>
                 </div>
               ))}
             </div>

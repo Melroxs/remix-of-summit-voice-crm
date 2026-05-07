@@ -129,39 +129,16 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Also try to match a call_sessions row (new dialer)
-      let session: { id: string; lead_id: string; agent_id: string | null; campaign_id: string | null } | null = null;
-      if (callControlId) {
-        const { data: s } = await supabase
-          .from("call_sessions")
-          .select("id, lead_id, agent_id, campaign_id")
-          .eq("telnyx_call_control_id", callControlId)
-          .maybeSingle();
-        session = s as any;
-      }
-
-      // Upsert recording (covers both legacy call_attempts + new call_sessions)
+      // Insert recording
       const { data: recording, error: insertError } = await supabase
         .from("call_recordings")
-        .upsert(
-          {
-            telnyx_recording_id: recordingId,
-            call_attempt_id: callLogId,
-            call_session_id: session?.id ?? null,
-            lead_id: session?.lead_id ?? null,
-            agent_id: session?.agent_id ?? null,
-            campaign_id: session?.campaign_id ?? null,
-            telnyx_call_control_id: callControlId ?? null,
-            telnyx_call_leg_id: callLegId ?? null,
-            recording_url: downloadUrl || null,
-            download_url: downloadUrl || null,
-            duration_seconds: duration ? Math.round(duration) : null,
-            format,
-            status: "available",
-            available_at: new Date().toISOString(),
-          },
-          { onConflict: "telnyx_recording_id" },
-        )
+        .insert({
+          telnyx_recording_id: recordingId,
+          call_attempt_id: callLogId,
+          recording_url: downloadUrl || null,
+          duration_seconds: duration ? Math.round(duration) : null,
+          format,
+        })
         .select("id")
         .single();
 
@@ -179,19 +156,6 @@ Deno.serve(async (req) => {
           .from("call_attempts")
           .update({ call_recording_id: recording.id } as any)
           .eq("id", callLogId);
-      }
-
-      // Mirror onto call_sessions
-      if (session) {
-        await supabase
-          .from("call_sessions")
-          .update({
-            recording_status: "available",
-            recording_id: recordingId,
-            recording_url: downloadUrl || null,
-            recording_download_url: downloadUrl || null,
-          })
-          .eq("id", session.id);
       }
 
       console.log("[telnyx-webhook] Recording stored:", recording?.id);
@@ -228,40 +192,6 @@ Deno.serve(async (req) => {
         }
       } else {
         console.warn("[telnyx-webhook] Missing telnyx call id or unmapped event:", eventType);
-      }
-
-      // Also update call_sessions for the new dialer
-      if (payload?.call_control_id) {
-        const ccid = payload.call_control_id as string;
-        const legId = payload?.call_leg_id ?? null;
-        if (eventType === "call.initiated") {
-          await supabase
-            .from("call_sessions")
-            .update({ telnyx_call_leg_id: legId, status: "ringing" })
-            .eq("telnyx_call_control_id", ccid);
-        } else if (eventType === "call.answered") {
-          await supabase
-            .from("call_sessions")
-            .update({ status: "active", answered_at: new Date().toISOString() })
-            .eq("telnyx_call_control_id", ccid);
-        } else if (eventType === "call.hangup") {
-          const endTime = new Date().toISOString();
-          const { data: s } = await supabase
-            .from("call_sessions")
-            .select("id, answered_at, started_at")
-            .eq("telnyx_call_control_id", ccid)
-            .maybeSingle();
-          if (s) {
-            const base = s.answered_at ?? s.started_at;
-            const dur = base
-              ? Math.max(0, Math.round((Date.now() - new Date(base).getTime()) / 1000))
-              : null;
-            await supabase
-              .from("call_sessions")
-              .update({ status: "ended", ended_at: endTime, duration_seconds: dur })
-              .eq("id", s.id);
-          }
-        }
       }
 
       return new Response(JSON.stringify({ ok: true, event: eventType }), {

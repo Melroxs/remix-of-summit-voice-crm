@@ -210,7 +210,17 @@ export function useDialerQueue(campaignId: string | null) {
     // Prefer leads already locked to me (ownership continuity), else fall back
     const myOwned = filtered.filter((r) => r.contacts?.locked_to_agent_id === myUserId);
     const pool = myOwned.length > 0 ? myOwned : filtered;
-    const cc = pool[0] || null;
+    let cc = pool[0] || null;
+
+    // Last-resort: if every candidate was excluded by recent-dial guard, allow least-recent
+    if (!cc) {
+      const onlyRecentExcluded = (ccRows as any[]).filter((r) => !suppressedContactIds.has(r.contact_id));
+      if (onlyRecentExcluded.length > 0) {
+        console.log("[Queue] ⚠️ All candidates recently dialed — allowing least-recent");
+        cc = onlyRecentExcluded[onlyRecentExcluded.length - 1];
+      }
+    }
+
     if (!cc) return null;
 
     // Fetch contact details (+ lock if needed) in parallel

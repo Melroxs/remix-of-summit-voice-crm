@@ -41,45 +41,6 @@ export type Database = {
         }
         Relationships: []
       }
-      agent_telephony_credentials: {
-        Row: {
-          active: boolean
-          agent_id: string
-          connection_id: string | null
-          created_at: string
-          encrypted_telnyx_sip_password: string | null
-          id: string
-          outbound_voice_profile_id: string | null
-          telnyx_credential_id: string | null
-          telnyx_sip_username: string | null
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean
-          agent_id: string
-          connection_id?: string | null
-          created_at?: string
-          encrypted_telnyx_sip_password?: string | null
-          id?: string
-          outbound_voice_profile_id?: string | null
-          telnyx_credential_id?: string | null
-          telnyx_sip_username?: string | null
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean
-          agent_id?: string
-          connection_id?: string | null
-          created_at?: string
-          encrypted_telnyx_sip_password?: string | null
-          id?: string
-          outbound_voice_profile_id?: string | null
-          telnyx_credential_id?: string | null
-          telnyx_sip_username?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       ai_summaries: {
         Row: {
           agent_id: string | null
@@ -377,11 +338,9 @@ export type Database = {
       call_attempts: {
         Row: {
           agent_id: string | null
-          answered_at: string | null
           attempt_number: number
           call_recording_id: string | null
           call_source: string
-          call_status: string | null
           campaign_id: string | null
           contact_id: string | null
           created_at: string
@@ -390,8 +349,6 @@ export type Database = {
           disposition: string | null
           duration_seconds: number | null
           ended_at: string | null
-          error_message: string | null
-          from_number: string | null
           id: string
           manual_dialed_e164: string | null
           manual_dialed_number: string | null
@@ -399,20 +356,14 @@ export type Database = {
           outbound_number_used: string | null
           outcome: Database["public"]["Enums"]["call_outcome"]
           provider_used: string | null
-          recording_url: string | null
           started_at: string | null
-          telnyx_call_control_id: string | null
           telnyx_call_id: string | null
-          telnyx_call_session_id: string | null
-          to_number: string | null
         }
         Insert: {
           agent_id?: string | null
-          answered_at?: string | null
           attempt_number?: number
           call_recording_id?: string | null
           call_source?: string
-          call_status?: string | null
           campaign_id?: string | null
           contact_id?: string | null
           created_at?: string
@@ -421,8 +372,6 @@ export type Database = {
           disposition?: string | null
           duration_seconds?: number | null
           ended_at?: string | null
-          error_message?: string | null
-          from_number?: string | null
           id?: string
           manual_dialed_e164?: string | null
           manual_dialed_number?: string | null
@@ -430,20 +379,14 @@ export type Database = {
           outbound_number_used?: string | null
           outcome?: Database["public"]["Enums"]["call_outcome"]
           provider_used?: string | null
-          recording_url?: string | null
           started_at?: string | null
-          telnyx_call_control_id?: string | null
           telnyx_call_id?: string | null
-          telnyx_call_session_id?: string | null
-          to_number?: string | null
         }
         Update: {
           agent_id?: string | null
-          answered_at?: string | null
           attempt_number?: number
           call_recording_id?: string | null
           call_source?: string
-          call_status?: string | null
           campaign_id?: string | null
           contact_id?: string | null
           created_at?: string
@@ -452,8 +395,6 @@ export type Database = {
           disposition?: string | null
           duration_seconds?: number | null
           ended_at?: string | null
-          error_message?: string | null
-          from_number?: string | null
           id?: string
           manual_dialed_e164?: string | null
           manual_dialed_number?: string | null
@@ -461,12 +402,8 @@ export type Database = {
           outbound_number_used?: string | null
           outcome?: Database["public"]["Enums"]["call_outcome"]
           provider_used?: string | null
-          recording_url?: string | null
           started_at?: string | null
-          telnyx_call_control_id?: string | null
           telnyx_call_id?: string | null
-          telnyx_call_session_id?: string | null
-          to_number?: string | null
         }
         Relationships: [
           {
@@ -495,50 +432,6 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      call_dispositions: {
-        Row: {
-          agent_id: string | null
-          call_session_id: string | null
-          callback_datetime: string | null
-          campaign_id: string | null
-          created_at: string
-          disposition: string
-          id: string
-          lead_id: string
-          notes: string | null
-        }
-        Insert: {
-          agent_id?: string | null
-          call_session_id?: string | null
-          callback_datetime?: string | null
-          campaign_id?: string | null
-          created_at?: string
-          disposition: string
-          id?: string
-          lead_id: string
-          notes?: string | null
-        }
-        Update: {
-          agent_id?: string | null
-          call_session_id?: string | null
-          callback_datetime?: string | null
-          campaign_id?: string | null
-          created_at?: string
-          disposition?: string
-          id?: string
-          lead_id?: string
-          notes?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "call_dispositions_call_session_id_fkey"
-            columns: ["call_session_id"]
-            isOneToOne: false
-            referencedRelation: "call_sessions"
             referencedColumns: ["id"]
           },
         ]
@@ -628,67 +521,33 @@ export type Database = {
       }
       call_recordings: {
         Row: {
-          agent_id: string | null
-          available_at: string | null
           call_attempt_id: string | null
-          call_session_id: string | null
-          campaign_id: string | null
           created_at: string
-          download_url: string | null
           duration_seconds: number | null
           format: string | null
           id: string
-          lead_id: string | null
           recording_url: string | null
-          status: string
-          telnyx_call_control_id: string | null
-          telnyx_call_leg_id: string | null
           telnyx_recording_id: string | null
         }
         Insert: {
-          agent_id?: string | null
-          available_at?: string | null
           call_attempt_id?: string | null
-          call_session_id?: string | null
-          campaign_id?: string | null
           created_at?: string
-          download_url?: string | null
           duration_seconds?: number | null
           format?: string | null
           id?: string
-          lead_id?: string | null
           recording_url?: string | null
-          status?: string
-          telnyx_call_control_id?: string | null
-          telnyx_call_leg_id?: string | null
           telnyx_recording_id?: string | null
         }
         Update: {
-          agent_id?: string | null
-          available_at?: string | null
           call_attempt_id?: string | null
-          call_session_id?: string | null
-          campaign_id?: string | null
           created_at?: string
-          download_url?: string | null
           duration_seconds?: number | null
           format?: string | null
           id?: string
-          lead_id?: string | null
           recording_url?: string | null
-          status?: string
-          telnyx_call_control_id?: string | null
-          telnyx_call_leg_id?: string | null
           telnyx_recording_id?: string | null
         }
         Relationships: [
-          {
-            foreignKeyName: "call_recordings_call_session_id_fkey"
-            columns: ["call_session_id"]
-            isOneToOne: false
-            referencedRelation: "call_sessions"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "recordings_call_log_id_fkey"
             columns: ["call_attempt_id"]
@@ -697,72 +556,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      call_sessions: {
-        Row: {
-          agent_id: string | null
-          answered_at: string | null
-          campaign_id: string | null
-          direction: string
-          duration_seconds: number | null
-          ended_at: string | null
-          failure_reason: string | null
-          from_number: string | null
-          id: string
-          lead_id: string
-          recording_download_url: string | null
-          recording_id: string | null
-          recording_status: string | null
-          recording_url: string | null
-          started_at: string
-          status: string
-          telnyx_call_control_id: string | null
-          telnyx_call_leg_id: string | null
-          to_number: string | null
-        }
-        Insert: {
-          agent_id?: string | null
-          answered_at?: string | null
-          campaign_id?: string | null
-          direction?: string
-          duration_seconds?: number | null
-          ended_at?: string | null
-          failure_reason?: string | null
-          from_number?: string | null
-          id?: string
-          lead_id: string
-          recording_download_url?: string | null
-          recording_id?: string | null
-          recording_status?: string | null
-          recording_url?: string | null
-          started_at?: string
-          status?: string
-          telnyx_call_control_id?: string | null
-          telnyx_call_leg_id?: string | null
-          to_number?: string | null
-        }
-        Update: {
-          agent_id?: string | null
-          answered_at?: string | null
-          campaign_id?: string | null
-          direction?: string
-          duration_seconds?: number | null
-          ended_at?: string | null
-          failure_reason?: string | null
-          from_number?: string | null
-          id?: string
-          lead_id?: string
-          recording_download_url?: string | null
-          recording_id?: string | null
-          recording_status?: string | null
-          recording_url?: string | null
-          started_at?: string
-          status?: string
-          telnyx_call_control_id?: string | null
-          telnyx_call_leg_id?: string | null
-          to_number?: string | null
-        }
-        Relationships: []
       }
       call_transcripts: {
         Row: {
@@ -1571,63 +1364,6 @@ export type Database = {
           },
         ]
       }
-      daily_lead_assignments: {
-        Row: {
-          agent_id: string
-          assigned_by: string | null
-          assigned_date: string
-          call_attempt_id: string | null
-          campaign_id: string
-          completed_at: string | null
-          contact_id: string
-          created_at: string
-          disposition: string | null
-          id: string
-          locked_at: string | null
-          locked_by: string | null
-          notes: string | null
-          queue_position: number
-          status: Database["public"]["Enums"]["daily_assignment_status"]
-          updated_at: string
-        }
-        Insert: {
-          agent_id: string
-          assigned_by?: string | null
-          assigned_date?: string
-          call_attempt_id?: string | null
-          campaign_id: string
-          completed_at?: string | null
-          contact_id: string
-          created_at?: string
-          disposition?: string | null
-          id?: string
-          locked_at?: string | null
-          locked_by?: string | null
-          notes?: string | null
-          queue_position?: number
-          status?: Database["public"]["Enums"]["daily_assignment_status"]
-          updated_at?: string
-        }
-        Update: {
-          agent_id?: string
-          assigned_by?: string | null
-          assigned_date?: string
-          call_attempt_id?: string | null
-          campaign_id?: string
-          completed_at?: string | null
-          contact_id?: string
-          created_at?: string
-          disposition?: string | null
-          id?: string
-          locked_at?: string | null
-          locked_by?: string | null
-          notes?: string | null
-          queue_position?: number
-          status?: Database["public"]["Enums"]["daily_assignment_status"]
-          updated_at?: string
-        }
-        Relationships: []
-      }
       daily_reports: {
         Row: {
           agent_id: string | null
@@ -2255,13 +1991,10 @@ export type Database = {
           created_at: string
           email: string | null
           home_address: string | null
-          home_lat: number | null
-          home_lng: number | null
           id: string
           is_active: boolean
           name: string
           phone: string | null
-          service_areas: string[]
           skills: string[]
           updated_at: string
           user_id: string | null
@@ -2274,13 +2007,10 @@ export type Database = {
           created_at?: string
           email?: string | null
           home_address?: string | null
-          home_lat?: number | null
-          home_lng?: number | null
           id?: string
           is_active?: boolean
           name: string
           phone?: string | null
-          service_areas?: string[]
           skills?: string[]
           updated_at?: string
           user_id?: string | null
@@ -2293,13 +2023,10 @@ export type Database = {
           created_at?: string
           email?: string | null
           home_address?: string | null
-          home_lat?: number | null
-          home_lng?: number | null
           id?: string
           is_active?: boolean
           name?: string
           phone?: string | null
-          service_areas?: string[]
           skills?: string[]
           updated_at?: string
           user_id?: string | null
@@ -2526,38 +2253,6 @@ export type Database = {
         }
         Returns: undefined
       }
-      complete_queue_assignment: {
-        Args: {
-          _assignment_id: string
-          _call_attempt_id: string
-          _disposition: string
-          _notes: string
-        }
-        Returns: {
-          agent_id: string
-          assigned_by: string | null
-          assigned_date: string
-          call_attempt_id: string | null
-          campaign_id: string
-          completed_at: string | null
-          contact_id: string
-          created_at: string
-          disposition: string | null
-          id: string
-          locked_at: string | null
-          locked_by: string | null
-          notes: string | null
-          queue_position: number
-          status: Database["public"]["Enums"]["daily_assignment_status"]
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "daily_lead_assignments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       contact_in_user_company: {
         Args: { _contact_id: string }
         Returns: boolean
@@ -2599,60 +2294,6 @@ export type Database = {
         Returns: boolean
       }
       is_same_company: { Args: { _company_id: string }; Returns: boolean }
-      lock_next_daily_assignment: {
-        Args: { _agent_id: string; _campaign_id?: string }
-        Returns: {
-          agent_id: string
-          assigned_by: string | null
-          assigned_date: string
-          call_attempt_id: string | null
-          campaign_id: string
-          completed_at: string | null
-          contact_id: string
-          created_at: string
-          disposition: string | null
-          id: string
-          locked_at: string | null
-          locked_by: string | null
-          notes: string | null
-          queue_position: number
-          status: Database["public"]["Enums"]["daily_assignment_status"]
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "daily_lead_assignments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      lock_queue_assignment: {
-        Args: { _assignment_id: string }
-        Returns: {
-          agent_id: string
-          assigned_by: string | null
-          assigned_date: string
-          call_attempt_id: string | null
-          campaign_id: string
-          completed_at: string | null
-          contact_id: string
-          created_at: string
-          disposition: string | null
-          id: string
-          locked_at: string | null
-          locked_by: string | null
-          notes: string | null
-          queue_position: number
-          status: Database["public"]["Enums"]["daily_assignment_status"]
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "daily_lead_assignments"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
       log_audit_event: {
         Args: {
           _entity_id?: string
@@ -2683,13 +2324,7 @@ export type Database = {
         | "lunch"
         | "tea"
         | "bathroom_break"
-      app_role:
-        | "admin"
-        | "manager"
-        | "agent"
-        | "client"
-        | "team_leader"
-        | "technician"
+      app_role: "admin" | "manager" | "agent" | "client" | "team_leader"
       appointment_status:
         | "booked"
         | "confirmed"
@@ -2727,17 +2362,6 @@ export type Database = {
         | "failed"
       callback_status: "pending" | "completed" | "missed" | "cancelled"
       campaign_status: "draft" | "active" | "paused" | "completed" | "archived"
-      daily_assignment_status:
-        | "new"
-        | "assigned"
-        | "calling"
-        | "completed"
-        | "callback"
-        | "no_answer"
-        | "voicemail"
-        | "not_interested"
-        | "appointment_set"
-        | "do_not_call"
       dial_session_status: "active" | "paused" | "ended"
       dial_status: "pending" | "dialing" | "completed" | "skipped" | "failed"
       dnc_source:
@@ -2928,14 +2552,7 @@ export const Constants = {
         "tea",
         "bathroom_break",
       ],
-      app_role: [
-        "admin",
-        "manager",
-        "agent",
-        "client",
-        "team_leader",
-        "technician",
-      ],
+      app_role: ["admin", "manager", "agent", "client", "team_leader"],
       appointment_status: [
         "booked",
         "confirmed",
@@ -2976,18 +2593,6 @@ export const Constants = {
       ],
       callback_status: ["pending", "completed", "missed", "cancelled"],
       campaign_status: ["draft", "active", "paused", "completed", "archived"],
-      daily_assignment_status: [
-        "new",
-        "assigned",
-        "calling",
-        "completed",
-        "callback",
-        "no_answer",
-        "voicemail",
-        "not_interested",
-        "appointment_set",
-        "do_not_call",
-      ],
       dial_session_status: ["active", "paused", "ended"],
       dial_status: ["pending", "dialing", "completed", "skipped", "failed"],
       dnc_source: [

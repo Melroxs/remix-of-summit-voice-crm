@@ -16,7 +16,6 @@ const Contacts = lazy(() => import("@/pages/Contacts"));
 const Campaigns = lazy(() => import("@/pages/Campaigns"));
 const CampaignDetail = lazy(() => import("@/pages/CampaignDetail"));
 const Dialer = lazy(() => import("@/pages/Dialer"));
-const DialerV2 = lazy(() => import("@/pages/DialerV2"));
 const Imports = lazy(() => import("@/pages/Imports"));
 const Callbacks = lazy(() => import("@/pages/Callbacks"));
 const Recordings = lazy(() => import("@/pages/Recordings"));
@@ -34,7 +33,6 @@ const DialerScripts = lazy(() => import("@/pages/DialerScripts"));
 const TrainingHub = lazy(() => import("@/pages/TrainingHub"));
 const FollowUpTasks = lazy(() => import("@/pages/FollowUpTasks"));
 const TechnicianCalendar = lazy(() => import("@/pages/TechnicianCalendar"));
-const TechnicianDashboard = lazy(() => import("@/pages/TechnicianDashboard"));
 
 const queryClient = new QueryClient();
 
@@ -66,7 +64,6 @@ function RoleRedirect() {
 
   if (role === "client") return <Navigate to="/client-portal" replace />;
   if (role === "team_leader") return <Navigate to="/team-dashboard" replace />;
-  if (role === "technician") return <Navigate to="/technician-dashboard" replace />;
   return <Dashboard />;
 }
 
@@ -101,9 +98,6 @@ const App = () => (
                 <Route path="/dialer" element={
                   <RoleGuard allowedRoles={["admin", "agent"]}><Dialer /></RoleGuard>
                 } />
-                <Route path="/dialer-v2" element={
-                  <RoleGuard allowedRoles={["admin", "agent"]}><DialerV2 /></RoleGuard>
-                } />
                 <Route path="/callbacks" element={
                   <RoleGuard allowedRoles={["admin", "agent"]}><Callbacks /></RoleGuard>
                 } />
@@ -111,10 +105,7 @@ const App = () => (
                   <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><Appointments /></RoleGuard>
                 } />
                 <Route path="/technicians" element={
-                  <RoleGuard allowedRoles={["admin", "manager", "team_leader", "agent", "client", "technician"]}><TechnicianCalendar /></RoleGuard>
-                } />
-                <Route path="/technician-dashboard" element={
-                  <RoleGuard allowedRoles={["admin", "manager", "technician"]}><TechnicianDashboard /></RoleGuard>
+                  <RoleGuard allowedRoles={["admin", "manager", "team_leader", "agent", "client"]}><TechnicianCalendar /></RoleGuard>
                 } />
                 <Route path="/tasks" element={
                   <RoleGuard allowedRoles={["admin", "agent", "team_leader"]}><FollowUpTasks /></RoleGuard>

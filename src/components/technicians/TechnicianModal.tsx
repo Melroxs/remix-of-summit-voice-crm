@@ -6,10 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useSaveTechnician, type Technician } from "@/hooks/use-technicians";
-import LocationPicker from "./LocationPicker";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { X } from "lucide-react";
 
 interface Props {
   open: boolean;
@@ -30,11 +26,6 @@ export default function TechnicianModal({ open, onOpenChange, technician }: Prop
   const [end, setEnd] = useState("17:00");
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [active, setActive] = useState(true);
-  const [lat, setLat] = useState<number | null>(null);
-  const [lng, setLng] = useState<number | null>(null);
-  const [serviceAreas, setServiceAreas] = useState<string[]>([]);
-  const [areaInput, setAreaInput] = useState("");
-  const [locationMode, setLocationMode] = useState<"address" | "areas">("address");
 
   useEffect(() => {
     if (open) {
@@ -47,15 +38,6 @@ export default function TechnicianModal({ open, onOpenChange, technician }: Prop
       setEnd(technician?.working_hours_end?.slice(0, 5) ?? "17:00");
       setDays(technician?.working_days ?? [1, 2, 3, 4, 5]);
       setActive(technician?.is_active ?? true);
-      setLat(technician?.home_lat ?? null);
-      setLng(technician?.home_lng ?? null);
-      setServiceAreas(technician?.service_areas ?? []);
-      setAreaInput("");
-      setLocationMode(
-        (technician?.service_areas?.length ?? 0) > 0 && !technician?.home_address
-          ? "areas"
-          : "address",
-      );
     }
   }, [open, technician]);
 
@@ -67,7 +49,7 @@ export default function TechnicianModal({ open, onOpenChange, technician }: Prop
     await save.mutateAsync({
       id: technician?.id,
       name: name.trim(),
-      home_address: locationMode === "address" ? homeAddress.trim() || null : null,
+      home_address: homeAddress.trim() || null,
       phone: phone.trim() || null,
       email: email.trim() || null,
       skills: skills.split(",").map((s) => s.trim()).filter(Boolean),
@@ -76,25 +58,13 @@ export default function TechnicianModal({ open, onOpenChange, technician }: Prop
       working_days: days,
       is_active: active,
       user_id: technician?.user_id ?? null,
-      home_lat: locationMode === "address" ? lat : null,
-      home_lng: locationMode === "address" ? lng : null,
-      service_areas: locationMode === "areas" ? serviceAreas : [],
     });
     onOpenChange(false);
   };
 
-  const addArea = () => {
-    const v = areaInput.trim();
-    if (!v) return;
-    if (!serviceAreas.includes(v)) setServiceAreas([...serviceAreas, v]);
-    setAreaInput("");
-  };
-  const removeArea = (a: string) =>
-    setServiceAreas(serviceAreas.filter((x) => x !== a));
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{technician ? "Edit technician" : "Add technician"}</DialogTitle>
         </DialogHeader>
@@ -104,69 +74,8 @@ export default function TechnicianModal({ open, onOpenChange, technician }: Prop
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <Label className="mb-2 block">Location</Label>
-            <Tabs value={locationMode} onValueChange={(v) => setLocationMode(v as "address" | "areas")}>
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="address">Home address</TabsTrigger>
-                <TabsTrigger value="areas">Service areas</TabsTrigger>
-              </TabsList>
-              <TabsContent value="address" className="space-y-2 pt-2">
-                <Textarea
-                  value={homeAddress}
-                  onChange={(e) => setHomeAddress(e.target.value)}
-                  rows={2}
-                  placeholder="Street, City, State ZIP"
-                />
-                <LocationPicker
-                  lat={lat}
-                  lng={lng}
-                  address={homeAddress}
-                  onChange={({ lat: la, lng: ln, address }) => {
-                    setLat(la);
-                    setLng(ln);
-                    if (address) setHomeAddress(address);
-                  }}
-                />
-              </TabsContent>
-              <TabsContent value="areas" className="space-y-2 pt-2">
-                <p className="text-xs text-muted-foreground">
-                  Use this when the technician has no fixed home address. Add cities, ZIP codes, or regions they cover.
-                </p>
-                <div className="flex gap-2">
-                  <Input
-                    value={areaInput}
-                    onChange={(e) => setAreaInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addArea();
-                      }
-                    }}
-                    placeholder="e.g. Phoenix, AZ or 85001"
-                  />
-                  <Button type="button" variant="outline" onClick={addArea}>Add</Button>
-                </div>
-                <div className="flex flex-wrap gap-1.5 min-h-[28px]">
-                  {serviceAreas.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">No areas added yet.</span>
-                  ) : (
-                    serviceAreas.map((a) => (
-                      <Badge key={a} variant="secondary" className="gap-1">
-                        {a}
-                        <button
-                          type="button"
-                          onClick={() => removeArea(a)}
-                          className="hover:text-destructive"
-                          aria-label={`Remove ${a}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </TabsContent>
-            </Tabs>
+            <Label>Home address</Label>
+            <Textarea value={homeAddress} onChange={(e) => setHomeAddress(e.target.value)} rows={2} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
