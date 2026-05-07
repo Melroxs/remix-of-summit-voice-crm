@@ -47,7 +47,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { lead_import_id } = await req.json();
+    const { lead_import_id, mode } = await req.json();
+    const deleteContacts = mode !== "record_only"; // default = delete everything (legacy behavior)
     if (!lead_import_id) {
       return new Response(JSON.stringify({ error: "lead_import_id required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -67,16 +68,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find all contacts from this import
-    const { data: contacts } = await adminClient
-      .from("contacts")
-      .select("id")
-      .eq("lead_import_id", lead_import_id);
-
-    const contactIds = (contacts || []).map((c: any) => c.id);
+    // Find all contacts from this import (only needed when deleting them)
+    let contactIds: string[] = [];
     let deletedContacts = 0;
 
-    if (contactIds.length > 0) {
+    if (deleteContacts) {
+      const { data: contacts } = await adminClient
+        .from("contacts")
+        .select("id")
+        .eq("lead_import_id", lead_import_id);
+      contactIds = (contacts || []).map((c: any) => c.id);
+    }
+
+    if (deleteContacts && contactIds.length > 0) {
       // Delete related records in correct order (batched for large lists)
       const BATCH = 500;
       for (let i = 0; i < contactIds.length; i += BATCH) {
@@ -88,6 +92,8 @@ Deno.serve(async (req) => {
         await adminClient.from("appointments").delete().in("contact_id", batch);
         // Delete campaign_contacts
         await adminClient.from("campaign_contacts").delete().in("contact_id", batch);
+        // Delete daily lead assignments
+        await adminClient.from("daily_lead_assignments").delete().in("contact_id", batch);
 
         // Nullify contact_id on call_logs (preserve history but unlink)
         await adminClient.from("call_attempts").update({ contact_id: null }).in("contact_id", batch);
@@ -100,6 +106,12 @@ Deno.serve(async (req) => {
 
         deletedContacts += count || 0;
       }
+    } else if (!deleteContacts) {
+      // Mode A: keep contacts. Just unlink them from this import.
+      await adminClient
+        .from("contacts")
+        .update({ lead_import_id: null })
+        .eq("lead_import_id", lead_import_id);
     }
 
     // Delete import errors
@@ -115,6 +127,7 @@ Deno.serve(async (req) => {
       details: {
         lead_import_id,
         filename: job.filename,
+        mode: deleteContacts ? "record_and_contacts" : "record_only",
         contacts_deleted: deletedContacts,
       },
     });
