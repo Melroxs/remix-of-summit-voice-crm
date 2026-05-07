@@ -349,7 +349,45 @@ export default function Contacts() {
                 <SelectItem value="unlocked">Available</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={() => setShowAdvanced((v) => !v)}>
+              <Filter className="w-3 h-3 mr-1" /> {showAdvanced ? "Hide" : "More"} filters
+            </Button>
           </div>
+          {showAdvanced && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-3 border-t border-border mt-3">
+              <Input placeholder="City" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} />
+              <Input placeholder="State" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} />
+              <Input placeholder="ZIP" value={zipFilter} onChange={(e) => setZipFilter(e.target.value)} />
+              <Input placeholder="County" value={countyFilter} onChange={(e) => setCountyFilter(e.target.value)} />
+              <Input placeholder="Area code (e.g. 480)" value={areaCodeFilter} onChange={(e) => setAreaCodeFilter(e.target.value)} />
+              <Select value={ownerRenterFilter} onValueChange={setOwnerRenterFilter}>
+                <SelectTrigger><SelectValue placeholder="Owner / Renter" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Owner / Renter (any)</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="renter">Renter</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input placeholder="Credit rating" value={creditFilter} onChange={(e) => setCreditFilter(e.target.value)} />
+              <Input placeholder="Home value" value={homeValueFilter} onChange={(e) => setHomeValueFilter(e.target.value)} />
+              <Input placeholder="Household income" value={householdIncomeFilter} onChange={(e) => setHouseholdIncomeFilter(e.target.value)} />
+              <Select value={importBatchFilter} onValueChange={setImportBatchFilter}>
+                <SelectTrigger><SelectValue placeholder="Upload batch" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All upload batches</SelectItem>
+                  {importBatches.map((b) => <SelectItem key={b.id} value={b.id}>{b.filename}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Created from</label>
+                <Input type="date" value={createdFromFilter} onChange={(e) => setCreatedFromFilter(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Created to</label>
+                <Input type="date" value={createdToFilter} onChange={(e) => setCreatedToFilter(e.target.value)} />
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <Table>
