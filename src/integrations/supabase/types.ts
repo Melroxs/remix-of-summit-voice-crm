@@ -499,6 +499,50 @@ export type Database = {
           },
         ]
       }
+      call_dispositions: {
+        Row: {
+          agent_id: string | null
+          call_session_id: string | null
+          callback_datetime: string | null
+          campaign_id: string | null
+          created_at: string
+          disposition: string
+          id: string
+          lead_id: string
+          notes: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          call_session_id?: string | null
+          callback_datetime?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          disposition: string
+          id?: string
+          lead_id: string
+          notes?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          call_session_id?: string | null
+          callback_datetime?: string | null
+          campaign_id?: string | null
+          created_at?: string
+          disposition?: string
+          id?: string
+          lead_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_dispositions_call_session_id_fkey"
+            columns: ["call_session_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_events: {
         Row: {
           call_attempt_id: string
@@ -584,42 +628,67 @@ export type Database = {
       }
       call_recordings: {
         Row: {
+          agent_id: string | null
           available_at: string | null
           call_attempt_id: string | null
+          call_session_id: string | null
+          campaign_id: string | null
           created_at: string
           download_url: string | null
           duration_seconds: number | null
           format: string | null
           id: string
+          lead_id: string | null
           recording_url: string | null
           status: string
+          telnyx_call_control_id: string | null
+          telnyx_call_leg_id: string | null
           telnyx_recording_id: string | null
         }
         Insert: {
+          agent_id?: string | null
           available_at?: string | null
           call_attempt_id?: string | null
+          call_session_id?: string | null
+          campaign_id?: string | null
           created_at?: string
           download_url?: string | null
           duration_seconds?: number | null
           format?: string | null
           id?: string
+          lead_id?: string | null
           recording_url?: string | null
           status?: string
+          telnyx_call_control_id?: string | null
+          telnyx_call_leg_id?: string | null
           telnyx_recording_id?: string | null
         }
         Update: {
+          agent_id?: string | null
           available_at?: string | null
           call_attempt_id?: string | null
+          call_session_id?: string | null
+          campaign_id?: string | null
           created_at?: string
           download_url?: string | null
           duration_seconds?: number | null
           format?: string | null
           id?: string
+          lead_id?: string | null
           recording_url?: string | null
           status?: string
+          telnyx_call_control_id?: string | null
+          telnyx_call_leg_id?: string | null
           telnyx_recording_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "call_recordings_call_session_id_fkey"
+            columns: ["call_session_id"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "recordings_call_log_id_fkey"
             columns: ["call_attempt_id"]
@@ -628,6 +697,72 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      call_sessions: {
+        Row: {
+          agent_id: string | null
+          answered_at: string | null
+          campaign_id: string | null
+          direction: string
+          duration_seconds: number | null
+          ended_at: string | null
+          failure_reason: string | null
+          from_number: string | null
+          id: string
+          lead_id: string
+          recording_download_url: string | null
+          recording_id: string | null
+          recording_status: string | null
+          recording_url: string | null
+          started_at: string
+          status: string
+          telnyx_call_control_id: string | null
+          telnyx_call_leg_id: string | null
+          to_number: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          answered_at?: string | null
+          campaign_id?: string | null
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          from_number?: string | null
+          id?: string
+          lead_id: string
+          recording_download_url?: string | null
+          recording_id?: string | null
+          recording_status?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          telnyx_call_control_id?: string | null
+          telnyx_call_leg_id?: string | null
+          to_number?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          answered_at?: string | null
+          campaign_id?: string | null
+          direction?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          from_number?: string | null
+          id?: string
+          lead_id?: string
+          recording_download_url?: string | null
+          recording_id?: string | null
+          recording_status?: string | null
+          recording_url?: string | null
+          started_at?: string
+          status?: string
+          telnyx_call_control_id?: string | null
+          telnyx_call_leg_id?: string | null
+          to_number?: string | null
+        }
+        Relationships: []
       }
       call_transcripts: {
         Row: {
