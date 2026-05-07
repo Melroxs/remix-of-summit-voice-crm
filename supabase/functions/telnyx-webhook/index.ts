@@ -58,7 +58,10 @@ Deno.serve(async (req) => {
     const publicKey = Deno.env.get("TELNYX_WEBHOOK_PUBLIC_KEY");
     if (!publicKey) {
       console.error("[telnyx-webhook] TELNYX_WEBHOOK_PUBLIC_KEY not configured — rejecting request");
-      return new Response(JSON.stringify({ error: "Webhook verification not configured" }), {
+      return new Response(JSON.stringify({
+        error: "webhook_not_configured",
+        message: "TELNYX_WEBHOOK_PUBLIC_KEY is not set. Add the Ed25519 public key from Telnyx Mission Control → Account → Public Key.",
+      }), {
         status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -66,10 +69,34 @@ Deno.serve(async (req) => {
 
     const signature = req.headers.get("telnyx-signature-ed25519");
     const timestamp = req.headers.get("telnyx-timestamp");
+    if (!signature || !timestamp) {
+      console.warn("[telnyx-webhook] Missing telnyx-signature-ed25519 or telnyx-timestamp header");
+      return new Response(JSON.stringify({
+        error: "missing_signature",
+        message: "Required headers 'telnyx-signature-ed25519' and 'telnyx-timestamp' are missing. Request did not originate from Telnyx.",
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const tsNum = Number(timestamp);
+    if (Number.isFinite(tsNum) && Math.abs(Math.floor(Date.now() / 1000) - tsNum) > 300) {
+      console.warn("[telnyx-webhook] Stale timestamp — possible replay attack");
+      return new Response(JSON.stringify({
+        error: "stale_timestamp",
+        message: "Webhook timestamp is older than 5 minutes. Rejected to prevent replay.",
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const isValid = await verifyTelnyxSignature(rawBody, signature, timestamp, publicKey);
     if (!isValid) {
-      console.warn("[telnyx-webhook] Invalid or missing signature — rejecting");
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      console.warn("[telnyx-webhook] Invalid Ed25519 signature — rejecting");
+      return new Response(JSON.stringify({
+        error: "invalid_signature",
+        message: "Ed25519 signature verification failed. Confirm TELNYX_WEBHOOK_PUBLIC_KEY matches the public key shown in your Telnyx portal.",
+      }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
