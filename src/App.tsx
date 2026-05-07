@@ -34,6 +34,9 @@ const TrainingHub = lazy(() => import("@/pages/TrainingHub"));
 const FollowUpTasks = lazy(() => import("@/pages/FollowUpTasks"));
 const TechnicianCalendar = lazy(() => import("@/pages/TechnicianCalendar"));
 const TechnicianDashboard = lazy(() => import("@/pages/TechnicianDashboard"));
+const DailyLeadAssignment = lazy(() => import("@/pages/DailyLeadAssignment"));
+const MyCallingQueue = lazy(() => import("@/pages/MyCallingQueue"));
+const DialerDiagnostics = lazy(() => import("@/pages/DialerDiagnostics"));
 
 const queryClient = new QueryClient();
 
@@ -99,6 +102,15 @@ const App = () => (
                 } />
                 <Route path="/dialer" element={
                   <RoleGuard allowedRoles={["admin", "agent"]}><Dialer /></RoleGuard>
+                } />
+                <Route path="/my-queue" element={
+                  <RoleGuard allowedRoles={["admin", "agent"]}><MyCallingQueue /></RoleGuard>
+                } />
+                <Route path="/admin/daily-lead-assignment" element={
+                  <RoleGuard allowedRoles={["admin", "manager"]}><DailyLeadAssignment /></RoleGuard>
+                } />
+                <Route path="/admin/dialer-diagnostics" element={
+                  <RoleGuard allowedRoles={["admin", "agent"]}><DialerDiagnostics /></RoleGuard>
                 } />
                 <Route path="/callbacks" element={
                   <RoleGuard allowedRoles={["admin", "agent"]}><Callbacks /></RoleGuard>
