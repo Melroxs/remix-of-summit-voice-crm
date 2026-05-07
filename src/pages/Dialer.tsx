@@ -63,6 +63,9 @@ export default function Dialer() {
   const [lastOutboundNumber, setLastOutboundNumber] = useState<string | null>(null);
   const powerDialRef = useRef(false);
 
+  /** Flag: when true the next currentLead change should auto-dial. */
+  const autoDialPendingRef = useRef(false);
+
   /** Prevent overlapping disposition saves. */
   const disposingRef = useRef(false);
 
@@ -171,6 +174,29 @@ export default function Dialer() {
   }, [getNextOutboundNumber, markUsed]);
 
   // -----------------------------------------------------------------------
+  // Auto-dial trigger: watches for currentLead changes when power dial is on
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!autoDialPendingRef.current || !currentLead || onCall || !clientReady) return;
+    autoDialPendingRef.current = false;
+
+    const phone = currentLead.phone_e164 || currentLead.phone_raw;
+    if (!phone) {
+      console.log("[Dialer] ⚠️ Lead has no phone — skipping auto-dial");
+      return;
+    }
+
+    // Small delay for UI to render before dialing
+    const timer = setTimeout(async () => {
+      if (onCall) return;
+      console.log(`[Dialer] ⚡ Auto-dialing ${currentLead.first_name} ${currentLead.last_name}`);
+      await getOutboundCallerId();
+      makeCall(phone);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [currentLead, onCall, clientReady, getOutboundCallerId, makeCall]);
+
+  // -----------------------------------------------------------------------
   // Core handlers
   // -----------------------------------------------------------------------
   const handleLoadNext = useCallback(async () => {
@@ -224,9 +250,12 @@ export default function Dialer() {
    * so the useEffect above triggers the call automatically.
    */
   const advanceToNext = useCallback(async () => {
+    if (powerDialRef.current && isPowerMode) {
+      autoDialPendingRef.current = true;
+    }
     await fetchNextLead();
     setNotes("");
-  }, [fetchNextLead]);
+  }, [fetchNextLead, isPowerMode]);
 
   const handleDispose = useCallback(async (code: string) => {
     if (!currentLead || disposingRef.current) return;
@@ -278,8 +307,11 @@ export default function Dialer() {
     hangup();
     await skipLead();
     setNotes("");
+    if (powerDialRef.current && isPowerMode) {
+      autoDialPendingRef.current = true;
+    }
     await fetchNextLead();
-  }, [skipLead, fetchNextLead, hangup]);
+  }, [skipLead, fetchNextLead, hangup, isPowerMode]);
 
   // Power dial controls
   const startPowerDial = useCallback(async () => {
@@ -290,13 +322,15 @@ export default function Dialer() {
     powerDialRef.current = true;
     setPowerDialActive(true);
     setPowerDialPaused(false);
-    toast({ title: "Power Dial disabled", description: "Auto-dial has been removed from the legacy dialer. Use the new dialer for power dialing.", variant: "destructive" });
+    autoDialPendingRef.current = true;
+    toast({ title: "Power Dial started", description: "The system will automatically dial the next lead after each disposition." });
     await fetchNextLead();
     setNotes("");
   }, [campaignId, agentReady, clientReady, fetchNextLead]);
 
   const stopPowerDial = useCallback(() => {
     powerDialRef.current = false;
+    autoDialPendingRef.current = false;
     setPowerDialActive(false);
     setPowerDialPaused(false);
     toast({ title: "Power Dial stopped" });
@@ -306,6 +340,7 @@ export default function Dialer() {
   useEffect(() => {
     if (powerDialActive && !agentReady && !onCall) {
       setPowerDialPaused(true);
+      autoDialPendingRef.current = false;
     }
   }, [agentReady, powerDialActive, onCall]);
 

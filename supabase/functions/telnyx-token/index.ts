@@ -53,45 +53,18 @@ serve(async (req) => {
       );
     }
 
-    // 1. Try per-agent Telnyx credential (preferred)
-    const { data: cred } = await adminClient
-      .from("agent_telephony_credentials")
-      .select("telnyx_credential_id, telnyx_sip_username")
-      .eq("agent_id", userId)
-      .eq("active", true)
-      .maybeSingle();
-
-    const apiKey = Deno.env.get("TELNYX_API_KEY");
-    if (cred?.telnyx_credential_id && apiKey) {
-      const tokRes = await fetch(
-        `https://api.telnyx.com/v2/telephony_credentials/${cred.telnyx_credential_id}/token`,
-        { method: "POST", headers: { Authorization: `Bearer ${apiKey}` } },
-      );
-      if (tokRes.ok) {
-        const tokJson = await tokRes.json();
-        const login_token = tokJson?.token ?? tokJson?.data?.token;
-        if (login_token) {
-          return new Response(
-            JSON.stringify({ login_token, sip_username: cred.telnyx_sip_username }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-          );
-        }
-      } else {
-        console.warn("[telnyx-token] per-agent token fetch failed:", await tokRes.text());
-      }
-    }
-
-    // 2. Fallback to shared SIP credential from secrets
     const login = Deno.env.get("TELNYX_SIP_USERNAME") ?? Deno.env.get("VITE_TELNYX_LOGIN");
     const password = Deno.env.get("TELNYX_SIP_PASSWORD") ?? Deno.env.get("VITE_TELNYX_PASSWORD");
+
     if (!login || !password) {
       return new Response(
         JSON.stringify({ error: "Telnyx credentials not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
     return new Response(
-      JSON.stringify({ login, password, sip_username: login }),
+      JSON.stringify({ login, password }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
