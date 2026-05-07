@@ -55,6 +55,7 @@ serve(async (req) => {
 
     const login = Deno.env.get("TELNYX_SIP_USERNAME") ?? Deno.env.get("VITE_TELNYX_LOGIN");
     const password = Deno.env.get("TELNYX_SIP_PASSWORD") ?? Deno.env.get("VITE_TELNYX_PASSWORD");
+    const default_from_number = Deno.env.get("TELNYX_DEFAULT_FROM_NUMBER") ?? null;
 
     if (!login || !password) {
       return new Response(
@@ -64,7 +65,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ login, password }),
+      JSON.stringify({ login, password, default_from_number }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
