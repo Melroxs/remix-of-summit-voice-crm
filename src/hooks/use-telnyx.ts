@@ -24,6 +24,15 @@ const DESTROY_DEBOUNCE_MS = 4000;
  */
 const FORCE_HANGUP_MS = 3000;
 
+/**
+ * How many consecutive socket errors / closes we tolerate before surfacing
+ * an "error" connection state to the UI. The Telnyx SDK auto-reconnects
+ * internally, so brief blips should stay invisible to the agent.
+ */
+const SOCKET_ERROR_GRACE = 4;
+/** Reset the failure counter once the socket has been stable for this long. */
+const SOCKET_STABLE_MS = 10_000;
+
 interface UseTelnyxOptions {
   onCallStarted?: () => void;
   onCallEnded?: (durationSeconds: number) => void;
@@ -43,6 +52,11 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const optionsRef = useRef(options);
   optionsRef.current = options;
+
+  /** Count of consecutive socket errors / closes since last ready. */
+  const socketFailuresRef = useRef(0);
+  /** Timer that resets failure counter once socket is stable. */
+  const stableTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** True when the agent (or system) explicitly requested hangup. */
   const agentHungUpRef = useRef(false);
@@ -224,6 +238,9 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
         client = new TelnyxRTC({
           login: credentials.login,
           password: credentials.password,
+          // Keep the SDK alive across transient WS blips
+          ringtoneFile: undefined,
+          ringbackFile: undefined,
         });
 
         timeoutId = setTimeout(() => {
@@ -237,6 +254,11 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
         client.on("telnyx.ready", () => {
           if (destroyed) return;
           clearTimeout(timeoutId);
+          socketFailuresRef.current = 0;
+          if (stableTimerRef.current) clearTimeout(stableTimerRef.current);
+          stableTimerRef.current = setTimeout(() => {
+            socketFailuresRef.current = 0;
+          }, SOCKET_STABLE_MS);
           setConnectionState("ready");
           setErrorMessage(null);
           console.log("[Telnyx] Client ready");
@@ -246,16 +268,28 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
           if (destroyed) return;
           clearTimeout(timeoutId);
           const msg = error?.message || "Unknown Telnyx error";
-          console.error("[Telnyx] Error:", error);
+          const code = error?.code;
+          const isAuth =
+            msg.includes("credentials") || msg.includes("auth") ||
+            msg.includes("403") || msg.includes("401");
+          const isTransientWs = code === 45002 || msg.includes("WEBSOCKET");
 
-          let userMsg: string;
-          if (msg.includes("credentials") || msg.includes("auth") || msg.includes("403") || msg.includes("401")) {
-            userMsg = "Authentication failed. Check your Telnyx WebRTC credentials.";
-          } else if (msg.includes("registration")) {
-            userMsg = "Gateway registration failed.";
+          if (isTransientWs && !isAuth) {
+            socketFailuresRef.current += 1;
+            console.warn(
+              `[Telnyx] Transient socket error (${socketFailuresRef.current}/${SOCKET_ERROR_GRACE}) – SDK will auto-reconnect`,
+              error,
+            );
+            if (socketFailuresRef.current < SOCKET_ERROR_GRACE) return;
           } else {
-            userMsg = `Telnyx error: ${msg}`;
+            console.error("[Telnyx] Error:", error);
           }
+
+          const userMsg = isAuth
+            ? "Authentication failed. Check your Telnyx WebRTC credentials."
+            : msg.includes("registration")
+              ? "Gateway registration failed."
+              : `Telnyx error: ${msg}`;
 
           setConnectionState("error");
           setErrorMessage(userMsg);
@@ -264,16 +298,23 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
 
         client.on("telnyx.socket.error", (error: any) => {
           if (destroyed) return;
-          console.error("[Telnyx] Socket error:", error);
-          setConnectionState("error");
-          setErrorMessage("WebSocket connection failed.");
+          socketFailuresRef.current += 1;
+          console.warn(
+            `[Telnyx] Socket error (${socketFailuresRef.current}/${SOCKET_ERROR_GRACE})`,
+            error,
+          );
+          if (socketFailuresRef.current >= SOCKET_ERROR_GRACE) {
+            setConnectionState("error");
+            setErrorMessage("WebSocket connection failed.");
+          }
         });
 
         client.on("telnyx.socket.close", () => {
           if (destroyed) return;
-          console.warn("[Telnyx] Socket closed");
-          setConnectionState((prev) => (prev === "ready" ? "error" : prev));
-          setErrorMessage("Telnyx connection lost. Attempting to reconnect…");
+          console.warn("[Telnyx] Socket closed – SDK will reconnect");
+          // Don't flip to "error" on a single close; SDK reconnects automatically.
+          setConnectionState((prev) => (prev === "ready" ? "connecting" : prev));
+          setErrorMessage(null);
         });
 
         client.on("telnyx.notification", (notification: any) => {
@@ -311,6 +352,7 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
       destroyed = true;
       clearTimeout(timeoutId);
       if (destroyTimerRef.current) clearTimeout(destroyTimerRef.current);
+      if (stableTimerRef.current) clearTimeout(stableTimerRef.current);
       if (client) {
         try { client.disconnect(); } catch {}
         clientRef.current = null;
