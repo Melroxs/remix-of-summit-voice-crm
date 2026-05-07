@@ -140,7 +140,7 @@ export default function Recordings() {
 
   const getSecureUrl = async (recordingId: string): Promise<string | null> => {
     try {
-      const { data, error } = await supabase.functions.invoke("telnyx-recording-url", {
+      const { data, error } = await supabase.functions.invoke("get-recording-url", {
         body: { call_recording_id: recordingId },
       });
       if (error || !data?.url) return null;

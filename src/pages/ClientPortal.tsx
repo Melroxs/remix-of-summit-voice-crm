@@ -305,7 +305,7 @@ export default function ClientPortal() {
   }, [campaignIds]);
 
   const getSecureUrl = async (id: string) => {
-    const { data, error } = await supabase.functions.invoke("telnyx-recording-url", {
+    const { data, error } = await supabase.functions.invoke("get-recording-url", {
       body: { call_recording_id: id },
     });
     if (error || !data?.url) return null;

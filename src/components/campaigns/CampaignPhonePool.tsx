@@ -116,17 +116,25 @@ export default function CampaignPhonePool({ campaignId, phones, onRefresh }: Pro
       toast({ title: "Invalid phone", description: "Use E.164 format, e.g. +14805551234", variant: "destructive" });
       return;
     }
+    setVerifying(true);
+    setVerifyResult(null);
+    const { data, error } = await supabase.functions.invoke("telnyx-create-call", {
+      body: {
+        campaign_id: campaignId,
+        dry_run: true,
+        test_phone_e164: trimmed,
+      },
+    });
     setVerifying(false);
-    toast({
-      title: "Verification disabled",
-      description: "Server-side originate has been removed. Place a real test call from the Dialer to verify caller-ID rotation.",
-      variant: "destructive",
-    });
-    setVerifyResult({
-      to: trimmed, from: null, caller_id_phone: null, caller_id_area_code: null,
-      caller_id_strategy: "no_match", lead_area_code: null,
-      error: "Verification endpoint removed. Test from the Dialer.",
-    });
+    if (error) {
+      toast({ title: "Verification failed", description: error.message, variant: "destructive" });
+      setVerifyResult({
+        to: trimmed, from: null, caller_id_phone: null, caller_id_area_code: null,
+        caller_id_strategy: "no_match", lead_area_code: null, error: error.message,
+      });
+      return;
+    }
+    setVerifyResult(data);
   };
 
   const strategyMeta = (s: string) => {
