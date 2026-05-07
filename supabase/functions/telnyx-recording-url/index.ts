@@ -24,7 +24,8 @@ Deno.serve(async (req) => {
     const { data: claims } = await caller.auth.getClaims(auth.replace("Bearer ", ""));
     if (!claims?.claims?.sub) return json({ error: "Unauthorized" }, 401);
 
-    const { recording_id } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const recording_id: string | undefined = body?.recording_id || body?.call_recording_id;
     if (!recording_id || typeof recording_id !== "string") return json({ error: "recording_id required" }, 400);
 
     // RLS-guarded read
