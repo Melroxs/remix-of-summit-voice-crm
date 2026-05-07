@@ -18,6 +18,7 @@ interface UseTelnyxWebRTCReturn {
   connectionStatus: "disconnected" | "connecting" | "connected" | "error";
   currentCallControlId: string | null;
   initializeTelnyx: () => Promise<void>;
+  reconnect: () => void;
   makeCall: (toNumber: string, fromNumber: string) => void;
   hangUp: () => void;
   toggleMute: () => void;
@@ -231,6 +232,7 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
     connectionStatus,
     currentCallControlId,
     initializeTelnyx,
+    reconnect,
     makeCall,
     hangUp,
     toggleMute,
