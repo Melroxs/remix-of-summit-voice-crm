@@ -76,6 +76,7 @@ export default function DialerV2() {
     callStatus,
     connectionStatus,
     initializeTelnyx,
+    reconnect,
     makeCall,
     hangUp,
     toggleMute,
@@ -294,7 +295,7 @@ export default function DialerV2() {
         </span>
         {telnyxError && <span className="text-destructive ml-2">{telnyxError}</span>}
         {(connectionStatus === "disconnected" || connectionStatus === "error") && (
-          <Button size="sm" variant="outline" onClick={initializeTelnyx}>
+          <Button size="sm" variant="outline" onClick={reconnect}>
             Reconnect
           </Button>
         )}
