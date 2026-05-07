@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { UserPlus, Shield, Phone as PhoneIcon, Eye, Users, Pencil, Trash2, Power, PowerOff, AlertTriangle, Filter } from "lucide-react";
+import { UserPlus, Shield, Phone as PhoneIcon, Eye, Users, Pencil, Trash2, Power, PowerOff, AlertTriangle, Filter, Wrench } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { AgentStatusBadge } from "@/components/agents/AgentStatusSelector";
 import DeleteConfirmDialog from "@/components/contacts/DeleteConfirmDialog";
@@ -33,6 +33,11 @@ export default function UserManagement() {
   const [showCreate, setShowCreate] = useState(false);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
   const [clientAccounts, setClientAccounts] = useState<{ id: string; name: string }[]>([]);
+  const [technicians, setTechnicians] = useState<{ id: string; name: string; user_id: string | null }[]>([]);
+  const [selectedTechnicianId, setSelectedTechnicianId] = useState("");
+  const [techMode, setTechMode] = useState<"link" | "create">("link");
+  const [newTechName, setNewTechName] = useState("");
+  const [newTechPhone, setNewTechPhone] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
@@ -74,21 +79,60 @@ export default function UserManagement() {
     fetchUsers();
     supabase.from("campaigns").select("id, name").order("name").then(({ data }) => setCampaigns(data || []));
     supabase.from("client_accounts").select("id, name").order("name").then(({ data }) => setClientAccounts(data || []));
+    supabase.from("technicians").select("id, name, user_id").order("name").then(({ data }) => setTechnicians(data || []));
   }, [fetchUsers]);
 
   const handleCreate = async () => {
     if (!newEmail || !newPassword || !newRole) {
       toast({ title: "Missing fields", description: "Email, password and role are required.", variant: "destructive" }); return;
     }
+    if (newRole === "technician" && techMode === "link" && !selectedTechnicianId) {
+      toast({ title: "Select technician", description: "Pick an unlinked technician record or create a new one.", variant: "destructive" }); return;
+    }
+    if (newRole === "technician" && techMode === "create" && !newTechName.trim()) {
+      toast({ title: "Technician name required", variant: "destructive" }); return;
+    }
     setCreating(true);
     try {
+      let techIdForCreate = selectedTechnicianId;
+
+      // If creating a new technician inline, insert it first
+      if (newRole === "technician" && techMode === "create") {
+        const { data: prof } = await supabase.from("profiles").select("company_id").eq("user_id", user!.id).maybeSingle();
+        const companyId = prof?.company_id;
+        if (!companyId) throw new Error("No company found for current admin");
+        const { data: techIns, error: techErr } = await supabase
+          .from("technicians")
+          .insert({
+            name: newTechName.trim(),
+            phone: newTechPhone.trim() || null,
+            email: newEmail,
+            company_id: companyId,
+          })
+          .select("id")
+          .single();
+        if (techErr) throw new Error(techErr.message);
+        techIdForCreate = techIns!.id;
+      }
+
       const { data, error } = await supabase.functions.invoke("create-user", {
-        body: { email: newEmail, password: newPassword, display_name: newName || newEmail.split("@")[0], role: newRole, campaign_ids: (newRole === "agent" || newRole === "team_leader") ? selectedCampaigns : [], client_account_id: newRole === "client" ? selectedClientAccount : null },
+        body: {
+          email: newEmail,
+          password: newPassword,
+          display_name: newName || newEmail.split("@")[0],
+          role: newRole,
+          campaign_ids: (newRole === "agent" || newRole === "team_leader") ? selectedCampaigns : [],
+          client_account_id: newRole === "client" ? selectedClientAccount : null,
+          technician_id: newRole === "technician" ? techIdForCreate : null,
+        },
       });
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
       toast({ title: "User created", description: `${newEmail} added as ${newRole}` });
-      setShowCreate(false); resetForm(); await fetchUsers();
+      setShowCreate(false); resetForm();
+      await fetchUsers();
+      // refresh technicians list so the newly linked record shows correctly
+      supabase.from("technicians").select("id, name, user_id").order("name").then(({ data }) => setTechnicians(data || []));
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally { setCreating(false); }
@@ -138,7 +182,12 @@ export default function UserManagement() {
   };
 
   const openEdit = (u: UserRow) => { setEditingUser(u); setNewName(u.display_name || ""); };
-  const resetForm = () => { setNewEmail(""); setNewName(""); setNewPassword(""); setNewRole("agent"); setSelectedCampaigns([]); setSelectedClientAccount(""); setEditingUser(null); };
+  const resetForm = () => {
+    setNewEmail(""); setNewName(""); setNewPassword(""); setNewRole("agent");
+    setSelectedCampaigns([]); setSelectedClientAccount("");
+    setSelectedTechnicianId(""); setTechMode("link"); setNewTechName(""); setNewTechPhone("");
+    setEditingUser(null);
+  };
   const isSelf = (u: UserRow) => u.user_id === user?.id;
 
   const roleIcon = (role: string) => {
@@ -147,6 +196,7 @@ export default function UserManagement() {
       case "agent": return <PhoneIcon className="w-3 h-3" />;
       case "team_leader": return <Shield className="w-3 h-3" />;
       case "client": return <Eye className="w-3 h-3" />;
+      case "technician": return <Wrench className="w-3 h-3" />;
       default: return null;
     }
   };
@@ -157,6 +207,7 @@ export default function UserManagement() {
       case "team_leader": return "bg-purple-500/10 text-purple-400 border-purple-500/20";
       case "agent": return "bg-primary/10 text-primary border-primary/20";
       case "client": return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+      case "technician": return "bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
       default: return "";
     }
   };
@@ -188,6 +239,7 @@ export default function UserManagement() {
             <SelectItem value="team_leader">Team Leader</SelectItem>
             <SelectItem value="agent">Agent</SelectItem>
             <SelectItem value="client">Client</SelectItem>
+            <SelectItem value="technician">Technician</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -319,6 +371,7 @@ export default function UserManagement() {
                   <SelectItem value="team_leader">Team Leader</SelectItem>
                   <SelectItem value="agent">Agent</SelectItem>
                   <SelectItem value="client">Client</SelectItem>
+                  <SelectItem value="technician">Technician</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -343,6 +396,63 @@ export default function UserManagement() {
                   <SelectTrigger><SelectValue placeholder="Select account" /></SelectTrigger>
                   <SelectContent>{clientAccounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
                 </Select>
+              </div>
+            )}
+            {newRole === "technician" && (
+              <div className="space-y-3 rounded-md border border-border p-3 bg-muted/20">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={techMode === "link" ? "default" : "outline"}
+                    onClick={() => setTechMode("link")}
+                    className="flex-1"
+                  >
+                    Link existing
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={techMode === "create" ? "default" : "outline"}
+                    onClick={() => setTechMode("create")}
+                    className="flex-1"
+                  >
+                    Create new
+                  </Button>
+                </div>
+
+                {techMode === "link" ? (
+                  <div className="space-y-2">
+                    <Label>Technician Record</Label>
+                    <Select value={selectedTechnicianId} onValueChange={setSelectedTechnicianId}>
+                      <SelectTrigger><SelectValue placeholder="Select unlinked technician" /></SelectTrigger>
+                      <SelectContent>
+                        {technicians.filter((t) => !t.user_id).length === 0 ? (
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">No unlinked technicians</div>
+                        ) : technicians.filter((t) => !t.user_id).map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Only technicians not yet linked to a user appear.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="space-y-2">
+                      <Label>Technician Name *</Label>
+                      <Input value={newTechName} onChange={(e) => setNewTechName(e.target.value)} placeholder="e.g. Mike Johnson" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Technician Phone</Label>
+                      <Input value={newTechPhone} onChange={(e) => setNewTechPhone(e.target.value)} placeholder="+15551234567" />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      A new technician record will be created and linked to this login.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -83,6 +83,7 @@ export default function Dashboard() {
           contactsRes, campaignsRes, callsTodayRes, callbacksRes, appointmentsRes,
           recentCallsRes, upcomingCbRes,
           calls7dRes, appts7dRes, dncRes,
+          techApptsWeekRes, techAppts7dRes,
         ] = await Promise.all([
           supabase.from("contacts").select("id", { count: "exact", head: true }),
           supabase.from("campaigns").select("id", { count: "exact", head: true }).eq("status", "active"),
@@ -125,6 +126,21 @@ export default function Dashboard() {
             return q;
           })(),
           supabase.from("dnc_entries").select("id", { count: "exact", head: true }),
+          (() => {
+            const weekStart = new Date();
+            weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+            weekStart.setHours(0, 0, 0, 0);
+            return supabase
+              .from("technician_appointments")
+              .select("id", { count: "exact", head: true })
+              .gte("start_time", weekStart.toISOString())
+              .not("status", "in", "(cancelled,no_show)");
+          })(),
+          supabase
+            .from("technician_appointments")
+            .select("id", { count: "exact", head: true })
+            .gte("created_at", sevenIso)
+            .not("status", "in", "(cancelled,no_show)"),
         ]);
 
         const callsData = callsTodayRes.data || [];
@@ -141,11 +157,11 @@ export default function Dashboard() {
           activeCampaigns: campaignsRes.count ?? 0,
           callsToday: callsData.length,
           callbacksDue: callbacksRes.count ?? 0,
-          appointmentsThisWeek: appointmentsRes.count ?? 0,
+          appointmentsThisWeek: (appointmentsRes.count ?? 0) + (techApptsWeekRes.count ?? 0),
           avgTalkTime: avgTalk,
           attempts7d: calls7d.length,
           connects7d,
-          appts7d: appts7dRes.count ?? 0,
+          appts7d: (appts7dRes.count ?? 0) + (techAppts7dRes.count ?? 0),
           dncCount: dncRes.count ?? 0,
           recordingsAvailable7d: recordings7d,
         });

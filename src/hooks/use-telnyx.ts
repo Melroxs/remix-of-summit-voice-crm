@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { fetchTelnyxCredentials, getCallerIdNumber } from "@/lib/telnyx-config";
+import { acquireTelnyxLock, releaseTelnyxLock } from "@/lib/telnyx-singleton";
 
 export type TelnyxConnectionState = "not_configured" | "connecting" | "ready" | "error";
 export type TelnyxCallState = "idle" | "connecting" | "ringing" | "active" | "ending";
@@ -221,6 +222,12 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
 
         if (destroyed) return;
 
+        if (!acquireTelnyxLock("dialer-v1")) {
+          setConnectionState("error");
+          setErrorMessage("Another dialer page is already connected. Close /dialer-v2 to use this page.");
+          return;
+        }
+
         client = new TelnyxRTC({
           login: credentials.login,
           password: credentials.password,
@@ -315,6 +322,7 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
         try { client.disconnect(); } catch {}
         clientRef.current = null;
       }
+      releaseTelnyxLock("dialer-v1");
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

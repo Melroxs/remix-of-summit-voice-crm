@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 
-export type AppRole = "admin" | "manager" | "team_leader" | "agent" | "client";
+export type AppRole = "admin" | "manager" | "team_leader" | "agent" | "technician" | "client";
 
 interface Profile {
   id: string;
@@ -30,6 +30,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isAgent: boolean;
   isClient: boolean;
+  isTechnician: boolean;
   company: Company | null;
   companies: Company[];
   activeCompanyId: string | null;
@@ -48,6 +49,7 @@ const AuthContext = createContext<AuthContextType>({
   isAdmin: false,
   isAgent: false,
   isClient: false,
+  isTechnician: false,
   company: null,
   companies: [],
   activeCompanyId: null,
@@ -144,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Primary role = first in priority order: admin > manager > agent > client
-  const rolePriority: AppRole[] = ["admin", "manager", "team_leader", "agent", "client"];
+  const rolePriority: AppRole[] = ["admin", "manager", "team_leader", "agent", "technician", "client"];
   const primaryRole = rolePriority.find((r) => roles.includes(r)) || null;
 
   const value: AuthContextType = {
@@ -157,6 +159,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin: roles.includes("admin"),
     isAgent: roles.includes("agent"),
     isClient: roles.includes("client") && !roles.includes("admin") && !roles.includes("agent"),
+    isTechnician: roles.includes("technician") && !roles.includes("admin") && !roles.includes("agent"),
     company: companies.find((c) => c.id === activeCompanyId) ?? null,
     companies,
     activeCompanyId,

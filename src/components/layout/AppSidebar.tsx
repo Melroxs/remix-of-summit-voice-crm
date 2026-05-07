@@ -23,7 +23,7 @@ import {
   GraduationCap,
   ListTodo,
   Wrench,
-  PhoneCall,
+  CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,15 +45,17 @@ const allNavItems: NavItem[] = [
   { to: "/contacts", icon: Users, label: "Contacts", roles: ["admin", "agent"] },
   { to: "/imports", icon: Upload, label: "Imports", roles: ["admin"] },
   { to: "/campaigns", icon: Megaphone, label: "Campaigns", roles: ["admin"] },
-  { to: "/dialer", icon: Phone, label: "Dialer", roles: ["admin", "agent"] },
+  { to: "/dialer-v2", icon: Phone, label: "Dialer", roles: ["admin", "agent"] },
+  { to: "/dialer", icon: Phone, label: "Dialer (Legacy)", roles: ["admin", "agent"] },
   { to: "/scripts", icon: ScrollText, label: "Scripts", roles: ["admin", "agent", "team_leader"] },
   { to: "/callbacks", icon: CalendarClock, label: "Callbacks", roles: ["admin", "agent"] },
   { to: "/appointments", icon: CalendarCheck, label: "Appointments", roles: ["admin", "agent", "team_leader"] },
   { to: "/technicians", icon: Wrench, label: "Technicians", roles: ["admin", "manager", "team_leader", "agent", "client"] },
+  { to: "/technician-dashboard", icon: Wrench, label: "My Schedule", roles: ["technician"] },
+  { to: "/technicians", icon: CalendarDays, label: "My Calendar", roles: ["technician"] },
   { to: "/tasks", icon: ListTodo, label: "Follow-ups", roles: ["admin", "agent", "team_leader"] },
   { to: "/training", icon: GraduationCap, label: "Training Hub", roles: ["admin", "agent", "team_leader"] },
   { to: "/recordings", icon: Disc3, label: "Recordings", roles: ["admin"] },
-  { to: "/call-logs", icon: PhoneCall, label: "Call Logs", roles: ["admin", "team_leader", "manager"] },
   { to: "/reports", icon: BarChart3, label: "Reports", roles: ["admin"] },
   { to: "/users", icon: UserCog, label: "Users", roles: ["admin"] },
   { to: "/settings", icon: Settings, label: "Settings", roles: ["admin"] },

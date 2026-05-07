@@ -332,24 +332,6 @@ export type Database = {
           },
         ]
       }
-      area_code_map: {
-        Row: {
-          area_code: string
-          region: string | null
-          state_code: string
-        }
-        Insert: {
-          area_code: string
-          region?: string | null
-          state_code: string
-        }
-        Update: {
-          area_code?: string
-          region?: string | null
-          state_code?: string
-        }
-        Relationships: []
-      }
       audit_events: {
         Row: {
           actor_id: string | null
@@ -2076,66 +2058,6 @@ export type Database = {
         }
         Relationships: []
       }
-      number_pool: {
-        Row: {
-          area_code: string
-          call_count_today: number
-          call_count_total: number
-          company_id: string | null
-          cooldown_until: string | null
-          created_at: string
-          daily_limit: number
-          id: string
-          is_fallback: boolean
-          last_used_at: string | null
-          phone_number: string
-          region: string | null
-          spam_score: number
-          state_code: string | null
-          status: string
-          telnyx_number_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          area_code: string
-          call_count_today?: number
-          call_count_total?: number
-          company_id?: string | null
-          cooldown_until?: string | null
-          created_at?: string
-          daily_limit?: number
-          id?: string
-          is_fallback?: boolean
-          last_used_at?: string | null
-          phone_number: string
-          region?: string | null
-          spam_score?: number
-          state_code?: string | null
-          status?: string
-          telnyx_number_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          area_code?: string
-          call_count_today?: number
-          call_count_total?: number
-          company_id?: string | null
-          cooldown_until?: string | null
-          created_at?: string
-          daily_limit?: number
-          id?: string
-          is_fallback?: boolean
-          last_used_at?: string | null
-          phone_number?: string
-          region?: string | null
-          spam_score?: number
-          state_code?: string | null
-          status?: string
-          telnyx_number_id?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           agent_status: Database["public"]["Enums"]["agent_status"] | null
@@ -2641,16 +2563,6 @@ export type Database = {
         Returns: boolean
       }
       current_company_id: { Args: never; Returns: string }
-      fn_get_and_reserve_caller_id: {
-        Args: { lead_phone: string }
-        Returns: {
-          match_type: string
-          number_id: string
-          phone_number: string
-        }[]
-      }
-      fn_release_caller_id: { Args: { _number_id: string }; Returns: undefined }
-      fn_reset_number_pool_daily: { Args: never; Returns: undefined }
       get_next_lead_for_agent: {
         Args: { _agent_id: string; _campaign_id: string }
         Returns: {

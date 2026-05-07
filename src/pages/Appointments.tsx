@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarClock, MapPin, User, Search } from "lucide-react";
+import { CalendarClock, MapPin, User, Search, Wrench } from "lucide-react";
 import { format, isToday, isTomorrow, isThisWeek } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -29,6 +29,9 @@ interface Appointment {
   campaign_id: string | null;
   contacts?: { first_name: string; last_name: string; phone_e164: string | null } | null;
   campaigns?: { name: string } | null;
+  source?: "sales" | "technician";
+  technician_name?: string | null;
+  end_at?: string | null;
 }
 
 const statusColor: Record<string, string> = {
@@ -38,6 +41,10 @@ const statusColor: Record<string, string> = {
   rescheduled: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   no_show: "bg-destructive/15 text-destructive border-destructive/30",
   replaced: "bg-muted text-muted-foreground border-border",
+  scheduled: "bg-primary/15 text-primary border-primary/30",
+  en_route: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  on_site: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  cancelled: "bg-muted text-muted-foreground border-border",
 };
 
 export default function Appointments() {
@@ -54,18 +61,76 @@ export default function Appointments() {
 
   async function loadAppointments() {
     setLoading(true);
-    const { data } = await supabase
-      .from("appointments")
-      .select(
-        "*, contacts(first_name,last_name,phone_e164), campaigns(name)"
-      )
-      .order("appointment_at", { ascending: true });
-    setItems((data as unknown as Appointment[]) ?? []);
+    const [salesRes, techRes] = await Promise.all([
+      supabase
+        .from("appointments")
+        .select("*, contacts(first_name,last_name,phone_e164), campaigns(name)")
+        .order("appointment_at", { ascending: true }),
+      supabase
+        .from("technician_appointments")
+        .select(
+          "id, technician_id, contact_id, campaign_id, lead_address, start_time, end_time, status, notes, technicians(name)"
+        )
+        .order("start_time", { ascending: true }),
+    ]);
+    const sales: Appointment[] = ((salesRes.data as unknown as Appointment[]) ?? []).map(
+      (a) => ({ ...a, source: "sales" }),
+    );
+    const techRows = (techRes.data as unknown as Array<{
+      id: string; technician_id: string; contact_id: string | null; campaign_id: string | null;
+      lead_address: string | null; start_time: string; end_time: string; status: string;
+      notes: string | null;
+      technicians?: { name: string } | null;
+    }>) ?? [];
+
+    const contactIds = Array.from(new Set(techRows.map((t) => t.contact_id).filter(Boolean) as string[]));
+    const campaignIds = Array.from(new Set(techRows.map((t) => t.campaign_id).filter(Boolean) as string[]));
+    const [contactsRes, campaignsRes] = await Promise.all([
+      contactIds.length
+        ? supabase.from("contacts").select("id, first_name, last_name, phone_e164").in("id", contactIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; first_name: string; last_name: string; phone_e164: string | null }> }),
+      campaignIds.length
+        ? supabase.from("campaigns").select("id, name").in("id", campaignIds)
+        : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    ]);
+    const contactMap = new Map((contactsRes.data ?? []).map((c) => [c.id, c]));
+    const campaignMap = new Map((campaignsRes.data ?? []).map((c) => [c.id, c]));
+
+    const tech: Appointment[] = techRows.map((t) => ({
+      id: t.id,
+      appointment_at: t.start_time,
+      end_at: t.end_time,
+      status: t.status,
+      address: t.lead_address,
+      city: null, state: null, zip_code: null,
+      notes: t.notes,
+      contact_id: t.contact_id ?? "",
+      agent_id: null,
+      campaign_id: t.campaign_id,
+      contacts: t.contact_id
+        ? (contactMap.get(t.contact_id) as { first_name: string; last_name: string; phone_e164: string | null } | undefined) ?? null
+        : null,
+      campaigns: t.campaign_id ? campaignMap.get(t.campaign_id) ?? null : null,
+      source: "technician",
+      technician_name: t.technicians?.name ?? null,
+    }));
+    const combined = [...sales, ...tech].sort(
+      (a, b) => new Date(a.appointment_at).getTime() - new Date(b.appointment_at).getTime(),
+    );
+    setItems(combined);
     setLoading(false);
   }
 
   async function updateStatus(id: string, status: string) {
-    await supabase.from("appointments").update({ status: status as never }).eq("id", id);
+    const item = items.find((i) => i.id === id);
+    if (item?.source === "technician") {
+      await supabase
+        .from("technician_appointments")
+        .update({ status: status as never })
+        .eq("id", id);
+    } else {
+      await supabase.from("appointments").update({ status: status as never }).eq("id", id);
+    }
     loadAppointments();
   }
 
@@ -146,6 +211,10 @@ export default function Appointments() {
             <SelectItem value="completed">Completed</SelectItem>
             <SelectItem value="rescheduled">Rescheduled</SelectItem>
             <SelectItem value="no_show">No-show</SelectItem>
+            <SelectItem value="scheduled">Scheduled (tech)</SelectItem>
+            <SelectItem value="en_route">En route</SelectItem>
+            <SelectItem value="on_site">On site</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -192,7 +261,11 @@ export default function Appointments() {
 
                       <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-muted-foreground" />
+                          {a.source === "technician" ? (
+                            <Wrench className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <User className="w-4 h-4 text-muted-foreground" />
+                          )}
                           <span className="font-medium">
                             {a.contacts?.first_name} {a.contacts?.last_name}
                           </span>
@@ -201,7 +274,20 @@ export default function Appointments() {
                               {a.contacts.phone_e164}
                             </span>
                           )}
+                          {a.source === "technician" && (
+                            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                              Tech
+                            </Badge>
+                          )}
                         </div>
+                        {a.source === "technician" && a.technician_name && (
+                          <div className="text-xs text-muted-foreground">
+                            Technician: {a.technician_name}
+                            {a.end_at && (
+                              <span> · ends {format(new Date(a.end_at), "h:mm a")}</span>
+                            )}
+                          </div>
+                        )}
                         {(a.address || a.city) && (
                           <div className="flex items-start gap-2 text-sm text-muted-foreground">
                             <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
