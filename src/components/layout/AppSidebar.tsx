@@ -24,8 +24,6 @@ import {
   ListTodo,
   Wrench,
   CalendarDays,
-  ListChecks,
-  Stethoscope,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,9 +46,6 @@ const allNavItems: NavItem[] = [
   { to: "/imports", icon: Upload, label: "Imports", roles: ["admin"] },
   { to: "/campaigns", icon: Megaphone, label: "Campaigns", roles: ["admin"] },
   { to: "/dialer", icon: Phone, label: "Dialer", roles: ["admin", "agent"] },
-  { to: "/my-queue", icon: ListChecks, label: "My Queue", roles: ["admin", "agent"] },
-  { to: "/admin/daily-lead-assignment", icon: ListChecks, label: "Assign Leads", roles: ["admin", "manager"] },
-  { to: "/admin/dialer-diagnostics", icon: Stethoscope, label: "Dialer Diagnostics", roles: ["admin", "agent"] },
   { to: "/scripts", icon: ScrollText, label: "Scripts", roles: ["admin", "agent", "team_leader"] },
   { to: "/callbacks", icon: CalendarClock, label: "Callbacks", roles: ["admin", "agent"] },
   { to: "/appointments", icon: CalendarCheck, label: "Appointments", roles: ["admin", "agent", "team_leader"] },

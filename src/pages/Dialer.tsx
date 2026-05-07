@@ -1,371 +1,659 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { useTelnyxRtc } from "@/hooks/use-telnyx-rtc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import {
-  Phone, PhoneOff, Mic, MicOff, Lock, Play, Pause, Download,
-  AlertCircle, Loader2, Wifi, WifiOff, Timer, ChevronRight,
+  Phone, PhoneOff, Clock, FileText, ChevronRight,
+  SkipForward, Loader2, Wifi, WifiOff,
+  AlertTriangle, Zap, StopCircle, Timer,
 } from "lucide-react";
+import { CalendarPlus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useDialerQueue } from "@/hooks/use-dialer-queue";
+import { useTelnyx } from "@/hooks/use-telnyx";
+import { useAgentStatus, isCallableStatus, getStatusMeta } from "@/hooks/use-agent-status";
+import { useCampaignPhones } from "@/hooks/use-campaign-phones";
+import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { formatPhoneDisplay } from "@/lib/phone";
-import { getDefaultFromNumber } from "@/lib/telnyx-config";
+import LeadCard from "@/components/dialer/LeadCard";
+import ContactActivityTimeline from "@/components/dialer/ContactActivityTimeline";
+import DispositionPanel from "@/components/dialer/DispositionPanel";
+import CallbackModal from "@/components/dialer/CallbackModal";
+import AppointmentModal from "@/components/dialer/AppointmentModal";
+import WrapUpModal from "@/components/dialer/WrapUpModal";
+import TechnicianAppointmentModal from "@/components/technicians/TechnicianAppointmentModal";
+import DialPad from "@/components/dialer/DialPad";
+import AudioControls from "@/components/dialer/AudioControls";
+import DtmfPad from "@/components/dialer/DtmfPad";
+import { RetryCountdown } from "@/components/dialer/RetryCountdown";
 
-interface Assignment {
-  id: string;
-  campaign_id: string;
-  contact_id: string;
-  queue_position: number;
-  status: string;
-  contact: {
-    first_name: string;
-    last_name: string;
-    phone_e164: string | null;
-    city: string | null;
-    state: string | null;
-    address: string | null;
-    email: string | null;
-  } | null;
-  campaign: { name: string } | null;
-}
-
-const DISPOSITIONS = [
-  { code: "appointment_booked", label: "Appointment booked" },
-  { code: "callback", label: "Callback" },
-  { code: "no_answer", label: "No answer" },
-  { code: "voicemail", label: "Voicemail" },
-  { code: "not_interested", label: "Not interested" },
-  { code: "wrong_number", label: "Wrong number" },
-  { code: "dnc", label: "Do not call" },
-  { code: "have_solar", label: "Have solar" },
-  { code: "connected", label: "Connected — other" },
-];
+type DialModeType = "click_to_call" | "power_dial" | "auto_dial";
 
 export default function Dialer() {
-  const { user } = useAuth();
-  const { connState, connError, call, makeCall, hangup, toggleMute, resetCall } = useTelnyxRtc(true);
+  const { user, profile, refreshProfile } = useAuth();
+  const { updateStatus } = useAgentStatus();
 
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeIdx, setActiveIdx] = useState(0);
-  const [disposition, setDisposition] = useState("");
+  const [campaignId, setCampaignId] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string; status: string; dial_mode: string | null }[]>([]);
   const [notes, setNotes] = useState("");
-  const [callAttemptId, setCallAttemptId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [recording, setRecording] = useState<{ url: string | null; id: string | null }>({ url: null, id: null });
-  const [, setTick] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const [micOk, setMicOk] = useState<boolean | null>(null);
+  const [callTimer, setCallTimer] = useState(0);
+  const [showCallbackModal, setShowCallbackModal] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showTechApptModal, setShowTechApptModal] = useState(false);
+  const [pendingDisposition, setPendingDisposition] = useState<string | null>(null);
+  const [callDuration, setCallDuration] = useState(0);
+  const [showWrapUp, setShowWrapUp] = useState(false);
+  const [lastCallAttemptId, setLastCallAttemptId] = useState<string | null>(null);
+  const [campaignScripts, setCampaignScripts] = useState<{ id: string; title: string; body: string }[]>([]);
+  const [scriptDrawerOpen, setScriptDrawerOpen] = useState(false);
 
-  // request mic on mount
+  const [manualCallActive, setManualCallActive] = useState(false);
+  const [manualDialedRaw, setManualDialedRaw] = useState("");
+  const [manualDialedE164, setManualDialedE164] = useState("");
+  const [manualMatchedContact, setManualMatchedContact] = useState<import("@/hooks/use-dialer-queue").QueueContact | null>(null);
+
+  // Power dial state
+  const [powerDialActive, setPowerDialActive] = useState(false);
+  const [powerDialPaused, setPowerDialPaused] = useState(false);
+  const [lastOutboundNumber, setLastOutboundNumber] = useState<string | null>(null);
+  const powerDialRef = useRef(false);
+
+  /** Flag: when true the next currentLead change should auto-dial. */
+  const autoDialPendingRef = useRef(false);
+
+  /** Prevent overlapping disposition saves. */
+  const disposingRef = useRef(false);
+
+  const agentStatus = profile?.agent_status || "offline";
+  const agentReady = isCallableStatus(agentStatus);
+
+  const selectedCampaign = campaigns.find((c) => c.id === campaignId);
+  const campaignDialMode: DialModeType = (selectedCampaign?.dial_mode as DialModeType) || "click_to_call";
+  const isPowerMode = campaignDialMode === "power_dial" || campaignDialMode === "auto_dial";
+
+  const { currentLead, stats, loading, fetchNextLead, disposeLead, skipLead, fetchStats } =
+    useDialerQueue(campaignId);
+
+  const { phones, getNextOutboundNumber, markUsed } = useCampaignPhones(campaignId);
+
+  const {
+    connectionState, clientReady, callState, muted, held, errorMessage,
+    makeCall, hangup, toggleMute, toggleHold, sendDTMF,
+  } = useTelnyx({
+    onCallStarted: () => {
+      toast({ title: "Call connected", description: manualCallActive ? `Speaking with ${formatPhoneDisplay(manualDialedE164)}` : "You are now speaking with the lead." });
+      if (user) updateStatus(user.id, "on_call").catch(() => {});
+      refreshProfile();
+    },
+    onCallEnded: (duration) => {
+      setCallDuration(duration);
+      toast({ title: "Call ended", description: `Duration: ${Math.floor(duration / 60)}m ${duration % 60}s` });
+
+      if (manualCallActive) {
+        // Fire-and-forget manual call log
+        supabase.auth.getSession().then(({ data: session }) => {
+          const userId = session?.session?.user?.id;
+          supabase.from("call_attempts").insert({
+            agent_id: userId || null,
+            campaign_id: campaignId,
+            contact_id: manualMatchedContact?.contact_id || null,
+            started_at: new Date(Date.now() - duration * 1000).toISOString(),
+            ended_at: new Date().toISOString(),
+            duration_seconds: duration,
+            call_source: "manual",
+            manual_dialed_number: manualDialedRaw,
+            manual_dialed_e164: manualDialedE164,
+            outbound_number_used: lastOutboundNumber,
+            provider_used: "telnyx",
+            dial_mode_used: "manual",
+            notes: notes || null,
+          } as any).select("id").single().then(({ data }) => {
+            if (data?.id) setLastCallAttemptId(data.id);
+          });
+        });
+        setManualCallActive(false);
+        setManualDialedRaw("");
+        setManualDialedE164("");
+        setManualMatchedContact(null);
+      }
+
+      if (user) updateStatus(user.id, "wrap_up").catch(() => {});
+      refreshProfile();
+
+      // Open post-call wrap-up modal for queue calls (not manual)
+      if (currentLead && duration > 5) {
+        setShowWrapUp(true);
+      }
+    },
+    onError: (msg) => {
+      toast({ title: "Call error", description: msg, variant: "destructive" });
+      setManualCallActive(false);
+    },
+  });
+
+  const onCall = callState === "active" || callState === "connecting" || callState === "ringing";
+  const canMakeCalls = clientReady && agentReady && !onCall;
+
+  // Load campaigns once
   useEffect(() => {
-    navigator.mediaDevices?.getUserMedia({ audio: true })
-      .then((s) => { setMicOk(true); s.getTracks().forEach((t) => t.stop()); })
-      .catch(() => setMicOk(false));
+    supabase.from("campaigns").select("id, name, status, dial_mode")
+      .in("status", ["active", "draft"]).order("name")
+      .then(({ data }) => setCampaigns((data || []) as any[]));
   }, []);
 
-  // live timer while active
   useEffect(() => {
-    if (call?.state !== "active") return;
-    const i = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(i);
-  }, [call?.state]);
+    if (!campaignId) { setCampaignScripts([]); return; }
+    supabase.from("campaign_scripts").select("id, title, body")
+      .eq("campaign_id", campaignId).order("sort_order")
+      .then(({ data }) => setCampaignScripts((data || []) as any[]));
+  }, [campaignId]);
 
-  const reload = async () => {
-    if (!user) return;
-    setLoading(true);
-    const today = new Date().toISOString().slice(0, 10);
-    const { data, error } = await supabase
-      .from("daily_lead_assignments")
-      .select("id, campaign_id, contact_id, queue_position, status, contact:contacts(first_name,last_name,phone_e164,city,state,address,email), campaign:campaigns(name)")
-      .eq("agent_id", user.id)
-      .eq("assigned_date", today)
-      .in("status", ["new", "assigned", "calling", "callback", "no_answer", "voicemail"])
-      .order("queue_position", { ascending: true });
-    if (error) {
-      toast({ title: "Failed to load queue", description: error.message, variant: "destructive" });
+  // Call timer — only ticks while call is active
+  useEffect(() => {
+    if (callState !== "active") { setCallTimer(0); return; }
+    const interval = setInterval(() => setCallTimer((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, [callState]);
+
+  const activeContactId = currentLead?.contact_id || manualMatchedContact?.contact_id || null;
+
+  const getOutboundCallerId = useCallback(async (): Promise<string | null> => {
+    const poolNumber = await getNextOutboundNumber();
+    if (poolNumber) {
+      markUsed(poolNumber.id);
+      setLastOutboundNumber(poolNumber.phone_number);
+      return poolNumber.phone_number;
     }
-    setAssignments(((data || []) as any) as Assignment[]);
-    setActiveIdx(0);
-    setLoading(false);
-  };
-  useEffect(() => { reload(); /* eslint-disable-next-line */ }, [user?.id]);
-
-  // Poll for recording after call ends
-  useEffect(() => {
-    if (!callAttemptId || call?.state !== "ended") return;
-    let cancelled = false;
-    const tryFetch = async (attempt: number) => {
-      if (cancelled) return;
-      const { data } = await supabase
-        .from("call_recordings")
-        .select("id")
-        .eq("call_attempt_id", callAttemptId)
-        .limit(1)
-        .maybeSingle();
-      if (data?.id) {
-        const { data: signed } = await supabase.functions.invoke("get-recording-url", {
-          body: { call_recording_id: data.id },
-        });
-        setRecording({ id: data.id, url: signed?.url ?? null });
-      } else if (attempt < 12) {
-        setTimeout(() => tryFetch(attempt + 1), 5000);
-      }
-    };
-    tryFetch(0);
-    return () => { cancelled = true; };
-  }, [callAttemptId, call?.state]);
-
-  const active = assignments[activeIdx];
-  const elapsed = call?.answeredAt ? Math.floor((Date.now() - call.answeredAt) / 1000) : 0;
-  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-
-  const callLocked = !!callAttemptId && call?.state !== "ended" && call?.state !== "failed" && call?.state !== "idle";
-  const canCall =
-    connState === "ready" &&
-    micOk === true &&
-    !!active?.contact?.phone_e164 &&
-    !callLocked;
-
-  const callBlockedReason = useMemo(() => {
-    if (!active) return "No active lead.";
-    if (!active.contact?.phone_e164) return "Lead has no valid phone number.";
-    if (connState !== "ready") return `Telnyx not connected (${connState}${connError ? `: ${connError}` : ""}).`;
-    if (micOk === false) return "Microphone permission denied. Allow mic access and refresh.";
-    if (micOk === null) return "Requesting microphone permission…";
-    if (callLocked) return "A call is already in progress.";
+    setLastOutboundNumber(null);
     return null;
-  }, [active, connState, connError, micOk, callLocked]);
+  }, [getNextOutboundNumber, markUsed]);
 
-  const startCall = async () => {
-    if (!active?.contact?.phone_e164) return;
-    setRecording({ url: null, id: null });
-    setDisposition(""); setNotes(""); setCallAttemptId(null);
+  // -----------------------------------------------------------------------
+  // Auto-dial trigger: watches for currentLead changes when power dial is on
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (!autoDialPendingRef.current || !currentLead || onCall || !clientReady) return;
+    autoDialPendingRef.current = false;
+
+    const phone = currentLead.phone_e164 || currentLead.phone_raw;
+    if (!phone) {
+      console.log("[Dialer] ⚠️ Lead has no phone — skipping auto-dial");
+      return;
+    }
+
+    // Small delay for UI to render before dialing
+    const timer = setTimeout(async () => {
+      if (onCall) return;
+      console.log(`[Dialer] ⚡ Auto-dialing ${currentLead.first_name} ${currentLead.last_name}`);
+      await getOutboundCallerId();
+      makeCall(phone);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [currentLead, onCall, clientReady, getOutboundCallerId, makeCall]);
+
+  // -----------------------------------------------------------------------
+  // Core handlers
+  // -----------------------------------------------------------------------
+  const handleLoadNext = useCallback(async () => {
+    if (!agentReady) { toast({ title: "Not ready", description: "Set your status to Ready.", variant: "destructive" }); return; }
+    await fetchNextLead();
+    setNotes("");
+  }, [fetchNextLead, agentReady]);
+
+  const handleStartCall = useCallback(async () => {
+    if (!currentLead) return;
+    if (!agentReady) { toast({ title: "Not ready", variant: "destructive" }); return; }
+    const phone = currentLead.phone_e164 || currentLead.phone_raw;
+    if (!phone) { toast({ title: "No phone number", variant: "destructive" }); return; }
+    await getOutboundCallerId();
+    makeCall(phone);
+  }, [currentLead, agentReady, makeCall, getOutboundCallerId]);
+
+  const handleManualDial = useCallback(async (e164: string, raw: string) => {
+    if (!canMakeCalls) return;
+    setManualCallActive(true);
+    setManualDialedRaw(raw);
+    setManualDialedE164(e164);
     try {
-      const callerNumber = (await getDefaultFromNumber()) || "";
-      if (!callerNumber) {
-        toast({
-          title: "No caller ID configured",
-          description: "TELNYX_DEFAULT_FROM_NUMBER is not set on the backend.",
-          variant: "destructive",
+      const { data: matched } = await supabase
+        .from("contacts").select("*").eq("phone_e164", e164).limit(1).maybeSingle();
+      if (matched) {
+        setManualMatchedContact({
+          id: "", contact_id: matched.id, first_name: matched.first_name, last_name: matched.last_name,
+          phone_e164: matched.phone_e164, phone_raw: matched.phone_raw, address: matched.address,
+          city: matched.city, state: matched.state, zip_code: matched.zip_code, county: matched.county,
+          title: matched.title, owner_renter: matched.owner_renter, home_value: matched.home_value,
+          household_income: matched.household_income, credit_rating: matched.credit_rating,
+          cool_notes: matched.cool_notes, timezone: matched.timezone, lead_status: matched.lead_status,
+          attempts: 0, dial_status: null,
         });
-        return;
-      }
-      const callId = await makeCall({
-        destinationNumber: active.contact.phone_e164,
-        callerNumber,
-      });
-      const { data, error } = await supabase.functions.invoke("register-webrtc-call", {
-        body: {
-          campaign_id: active.campaign_id,
-          contact_id: active.contact_id,
-          telnyx_call_id: callId,
-          to_number: active.contact.phone_e164,
-          from_number: callerNumber,
-          assignment_id: active.id,
-        },
-      });
-      if (error) throw error;
-      setCallAttemptId(data?.call_attempt_id || null);
-    } catch (e: any) {
-      toast({ title: "Call failed", description: e?.message || String(e), variant: "destructive" });
-    }
-  };
+      } else { setManualMatchedContact(null); }
+    } catch { setManualMatchedContact(null); }
+    await getOutboundCallerId();
+    makeCall(e164);
+  }, [canMakeCalls, makeCall, getOutboundCallerId]);
 
-  const saveAndUnlock = async () => {
-    if (!active) return;
-    if (!disposition) {
-      toast({ title: "Disposition required", description: "Pick a disposition first.", variant: "destructive" });
-      return;
-    }
-    if (!notes.trim()) {
-      toast({ title: "Notes required", description: "Enter notes before saving.", variant: "destructive" });
-      return;
-    }
-    setSaving(true);
-    const { error } = await supabase.rpc("complete_queue_assignment", {
-      _assignment_id: active.id,
-      _disposition: disposition,
-      _notes: notes,
-      _call_attempt_id: callAttemptId,
-    });
-    if (error) {
-      setSaving(false);
-      toast({ title: "Save failed", description: error.message, variant: "destructive" });
-      return;
-    }
-    if (callAttemptId) {
-      await supabase.from("call_attempts").update({ disposition, notes }).eq("id", callAttemptId);
-    }
-    setSaving(false);
-    setDisposition(""); setNotes(""); setCallAttemptId(null);
-    setRecording({ url: null, id: null });
-    resetCall();
-    setAssignments((prev) => prev.filter((_, i) => i !== activeIdx));
-    setActiveIdx(0);
-    toast({ title: "Saved", description: "Next lead unlocked." });
-  };
+  const handleEndCall = () => { hangup(); };
 
-  const togglePlayback = () => {
-    if (!recording.url) return;
-    if (!audioRef.current) audioRef.current = new Audio(recording.url);
-    if (playing) { audioRef.current.pause(); setPlaying(false); }
-    else { audioRef.current.play().catch(() => {}); setPlaying(true); audioRef.current.onended = () => setPlaying(false); }
-  };
+  const triggerAiSummary = useCallback((callLogId: string | null) => {
+    if (!callLogId) return;
+    supabase.functions.invoke("ai-call-summary", { body: { call_attempt_id: callLogId } }).catch(() => {});
+  }, []);
+
+  /**
+   * Advance to next lead. If power dial is active, set the auto-dial flag
+   * so the useEffect above triggers the call automatically.
+   */
+  const advanceToNext = useCallback(async () => {
+    if (powerDialRef.current && isPowerMode) {
+      autoDialPendingRef.current = true;
+    }
+    await fetchNextLead();
+    setNotes("");
+  }, [fetchNextLead, isPowerMode]);
+
+  const handleDispose = useCallback(async (code: string) => {
+    if (!currentLead || disposingRef.current) return;
+    disposingRef.current = true;
+
+    try {
+      hangup();
+      if (code === "callback") { setPendingDisposition(code); setShowCallbackModal(true); return; }
+      if (code === "appointment_booked") { setPendingDisposition(code); setShowAppointmentModal(true); return; }
+
+      const t0 = performance.now();
+      const callLogId = await disposeLead(code, notes);
+      const elapsed = (performance.now() - t0).toFixed(0);
+      console.log(`[Dialer] 📋 Disposition saved in ${elapsed}ms`);
+
+      toast({ title: "Disposition saved", description: `${currentLead.first_name} ${currentLead.last_name} — ${code.replace("_", " ")}` });
+      triggerAiSummary(callLogId);
+
+      await advanceToNext();
+    } finally {
+      disposingRef.current = false;
+    }
+  }, [currentLead, notes, disposeLead, hangup, advanceToNext, triggerAiSummary]);
+
+  const handleModalSaved = useCallback(async () => {
+    if (!currentLead || !pendingDisposition) return;
+    setShowCallbackModal(false);
+    setShowAppointmentModal(false);
+    disposingRef.current = true;
+    try {
+      const callLogId = await disposeLead(pendingDisposition, notes);
+      setPendingDisposition(null);
+      toast({ title: "Disposition saved" });
+      triggerAiSummary(callLogId);
+      await advanceToNext();
+    } finally {
+      disposingRef.current = false;
+    }
+  }, [currentLead, pendingDisposition, notes, disposeLead, advanceToNext, triggerAiSummary]);
+
+  const handleModalClose = useCallback(() => {
+    setShowCallbackModal(false);
+    setShowAppointmentModal(false);
+    setPendingDisposition(null);
+    disposingRef.current = false;
+  }, []);
+
+  const handleSkip = useCallback(async () => {
+    hangup();
+    await skipLead();
+    setNotes("");
+    if (powerDialRef.current && isPowerMode) {
+      autoDialPendingRef.current = true;
+    }
+    await fetchNextLead();
+  }, [skipLead, fetchNextLead, hangup, isPowerMode]);
+
+  // Power dial controls
+  const startPowerDial = useCallback(async () => {
+    if (!campaignId || !agentReady || !clientReady) {
+      toast({ title: "Cannot start", description: "Ensure campaign is selected, status is Ready, and telephony is connected.", variant: "destructive" });
+      return;
+    }
+    powerDialRef.current = true;
+    setPowerDialActive(true);
+    setPowerDialPaused(false);
+    autoDialPendingRef.current = true;
+    toast({ title: "Power Dial started", description: "The system will automatically dial the next lead after each disposition." });
+    await fetchNextLead();
+    setNotes("");
+  }, [campaignId, agentReady, clientReady, fetchNextLead]);
+
+  const stopPowerDial = useCallback(() => {
+    powerDialRef.current = false;
+    autoDialPendingRef.current = false;
+    setPowerDialActive(false);
+    setPowerDialPaused(false);
+    toast({ title: "Power Dial stopped" });
+  }, []);
+
+  // Stop power dial if agent goes non-ready
+  useEffect(() => {
+    if (powerDialActive && !agentReady && !onCall) {
+      setPowerDialPaused(true);
+      autoDialPendingRef.current = false;
+    }
+  }, [agentReady, powerDialActive, onCall]);
+
+  const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const statusMeta = getStatusMeta(agentStatus);
+  const dialDisabledReason = !clientReady ? "Telnyx not connected" : !agentReady ? "Set status to Ready" : onCall ? "Call in progress" : undefined;
 
   return (
-    <div className="space-y-6 animate-slide-in">
-      <div className="flex items-center justify-between">
+    <div className="animate-slide-in">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dialer</h1>
-          <p className="text-muted-foreground text-sm">
-            {loading ? "Loading queue…" : `${assignments.length} leads remaining today`}
+          <h1 className="page-header-title">Dialer</h1>
+          <p className="page-header-subtitle">
+            {campaignId ? "Dial through your campaign queue or manually" : "Select a campaign or dial manually"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant={connState === "ready" ? "default" : "outline"} className="text-xs">
-            {connState === "ready" ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
-            Telnyx: {connState}
-          </Badge>
-          <Badge variant={micOk ? "default" : "outline"} className="text-xs">
-            {micOk ? <Mic className="w-3 h-3 mr-1" /> : <MicOff className="w-3 h-3 mr-1" />}
-            Mic: {micOk === null ? "…" : micOk ? "ok" : "denied"}
+        <div className="flex items-center gap-3">
+          {campaignId && (
+            <Badge variant="outline" className={
+              isPowerMode ? "text-warning border-warning/30" : "text-muted-foreground"
+            }>
+              {campaignDialMode === "power_dial" ? "⚡ Power Dial" : campaignDialMode === "auto_dial" ? "⚡ Auto Dial" : "📞 Click to Call"}
+            </Badge>
+          )}
+          {campaignScripts.length > 0 && (
+            <Sheet open={scriptDrawerOpen} onOpenChange={setScriptDrawerOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileText className="w-4 h-4 mr-2" />Scripts ({campaignScripts.length})
+                </Button>
+              </SheetTrigger>
+              <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+                <SheetHeader><SheetTitle>Campaign Scripts & Rebuttals</SheetTitle></SheetHeader>
+                <div className="space-y-4 mt-4">
+                  {campaignScripts.map((s) => (
+                    <div key={s.id} className="border border-border rounded-lg p-4">
+                      <h3 className="font-medium text-sm text-foreground mb-2">{s.title}</h3>
+                      <p className="text-sm text-muted-foreground whitespace-pre-wrap">{s.body}</p>
+                    </div>
+                  ))}
+                </div>
+              </SheetContent>
+            </Sheet>
+          )}
+          <AgentStatusSelector compact />
+          <Badge variant="outline" className={
+            connectionState === "ready" ? "text-success border-success/30" :
+            connectionState === "error" ? "text-destructive border-destructive/30" :
+            connectionState === "connecting" ? "text-warning border-warning/30" :
+            "text-muted-foreground"
+          }>
+            {connectionState === "ready" ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
+            {connectionState === "ready" ? "Connected" : connectionState === "connecting" ? "Connecting…" : connectionState === "error" ? "Error" : "Not Configured"}
           </Badge>
         </div>
       </div>
 
-      {connError && (
-        <Alert variant="destructive">
-          <AlertCircle className="w-4 h-4" />
-          <AlertDescription>{connError}</AlertDescription>
+      {!agentReady && !onCall && (
+        <Alert className="mb-4 border-warning/30 bg-warning/5">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning">
+            You are currently <strong>{statusMeta.label}</strong>. Set your status to <strong>Ready</strong> to make calls.
+          </AlertDescription>
         </Alert>
       )}
-
-      {!loading && !active && (
-        <Card>
-          <CardContent className="py-10 text-center text-muted-foreground">
-            No assigned leads for today. Ask your admin to assign a queue from
-            <span className="text-foreground"> Admin → Daily Lead Assignment</span>.
-          </CardContent>
-        </Card>
+      {powerDialActive && powerDialPaused && (
+        <Alert className="mb-4 border-warning/30 bg-warning/5">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning">
+            Power Dial is <strong>paused</strong> — agent status is not Ready. Set status to Ready to resume auto-dialing.
+          </AlertDescription>
+        </Alert>
+      )}
+      {connectionState === "not_configured" && (
+        <Alert className="mb-4 border-warning/30 bg-warning/5">
+          <AlertTriangle className="h-4 w-4 text-warning" />
+          <AlertDescription className="text-warning">Telnyx is not fully configured yet. Please add credentials in Settings.</AlertDescription>
+        </Alert>
+      )}
+      {connectionState === "error" && errorMessage && (
+        <Alert variant="destructive" className="mb-4"><AlertTriangle className="h-4 w-4" /><AlertDescription>{errorMessage}</AlertDescription></Alert>
       )}
 
-      {active && (
-        <Card className="border-primary/30">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center justify-between">
-              <span>{active.contact?.first_name} {active.contact?.last_name}</span>
-              <Badge variant="outline">#{active.queue_position} of today's queue</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><span className="text-muted-foreground">Phone:</span> <span className="font-mono">{formatPhoneDisplay(active.contact?.phone_e164 || "")}</span></div>
-              <div><span className="text-muted-foreground">Email:</span> {active.contact?.email || "—"}</div>
-              <div className="col-span-2"><span className="text-muted-foreground">Address:</span> {active.contact?.address || "—"}, {active.contact?.city || ""} {active.contact?.state || ""}</div>
-              <div className="col-span-2"><span className="text-muted-foreground">Campaign:</span> {active.campaign?.name || "—"}</div>
-            </div>
-
-            <div className="flex items-center gap-3 p-3 rounded-md bg-muted/40">
-              <Badge className="text-xs capitalize">{call?.state || "idle"}</Badge>
-              {call?.state === "active" && (
-                <span className="font-mono text-sm flex items-center gap-1">
-                  <Timer className="w-3 h-3" /> {fmt(elapsed)}
-                </span>
-              )}
-              {call?.errorMessage && (
-                <span className="text-xs text-destructive flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" /> {call.errorMessage}
-                </span>
-              )}
-            </div>
-
-            {callBlockedReason && !callLocked && (
-              <Alert>
-                <AlertCircle className="w-4 h-4" />
-                <AlertDescription>{callBlockedReason}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={startCall} disabled={!canCall}>
-                <Phone className="w-4 h-4 mr-2" /> Call
-              </Button>
-              <Button variant="destructive" onClick={hangup} disabled={!callLocked}>
-                <PhoneOff className="w-4 h-4 mr-2" /> Hang up
-              </Button>
-              <Button variant="outline" onClick={toggleMute} disabled={call?.state !== "active"}>
-                {call?.muted ? <MicOff className="w-4 h-4 mr-2" /> : <Mic className="w-4 h-4 mr-2" />}
-                {call?.muted ? "Unmute" : "Mute"}
-              </Button>
-              {recording.url && (
-                <>
-                  <Button variant="outline" onClick={togglePlayback}>
-                    {playing ? <Pause className="w-4 h-4 mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                    {playing ? "Pause" : "Play recording"}
-                  </Button>
-                  <a href={recording.url} target="_blank" rel="noreferrer">
-                    <Button variant="ghost"><Download className="w-4 h-4 mr-2" /> Download</Button>
-                  </a>
-                </>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">Disposition (required)</label>
-                <Select value={disposition} onValueChange={setDisposition}>
-                  <SelectTrigger><SelectValue placeholder="Choose disposition" /></SelectTrigger>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Panel */}
+        <div className="lg:col-span-3 space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Campaign</CardTitle></CardHeader>
+            <CardContent>
+              {campaigns.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No campaigns available</p>
+              ) : (
+                <Select value={campaignId || "__none__"} onValueChange={(v) => {
+                  setCampaignId(v === "__none__" ? null : v);
+                  hangup(); setNotes(""); stopPowerDial();
+                }}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select campaign" /></SelectTrigger>
                   <SelectContent>
-                    {DISPOSITIONS.map((d) => <SelectItem key={d.code} value={d.code}>{d.label}</SelectItem>)}
+                    <SelectItem value="__none__">No campaign</SelectItem>
+                    {campaigns.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              )}
+            </CardContent>
+          </Card>
+
+          {campaignId && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm">Queue Info</CardTitle></CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Remaining</span><span className="font-medium text-foreground">{stats.remaining}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Completed</span><span className="font-medium text-foreground">{stats.completed}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Callbacks</span><span className="font-medium text-foreground">{stats.callbacks}</span></div>
+                {stats.deferred > 0 && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1"><Timer className="w-3 h-3" />Deferred</span>
+                    <span className="font-medium text-warning">{stats.deferred}</span>
+                  </div>
+                )}
+                {stats.deferred > 0 && stats.nextRetryAt && (
+                  <RetryCountdown targetTime={stats.nextRetryAt} onExpired={fetchStats} />
+                )}
+                {phones.length > 0 && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Phone Pool</span><span className="font-medium text-foreground">{phones.filter(p => p.is_active).length} active</span></div>
+                )}
+                {lastOutboundNumber && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">Caller ID</span><span className="font-mono text-xs text-foreground">{formatPhoneDisplay(lastOutboundNumber)}</span></div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Power Dial Controls */}
+          {campaignId && isPowerMode && (
+            <Card>
+              <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><Zap className="w-4 h-4 text-warning" />Power Dial</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {!powerDialActive ? (
+                  <Button size="sm" className="w-full" onClick={startPowerDial} disabled={!canMakeCalls || stats.remaining === 0}>
+                    <Zap className="w-4 h-4 mr-1" /> Start Power Dial
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="destructive" className="w-full" onClick={stopPowerDial}>
+                    <StopCircle className="w-4 h-4 mr-1" /> Stop Power Dial
+                  </Button>
+                )}
+                {powerDialActive && (
+                  <div className="text-xs text-center">
+                    <Badge variant="outline" className={powerDialPaused ? "text-warning border-warning/30" : "text-success border-success/30"}>
+                      {powerDialPaused ? "Paused" : "Active"}
+                    </Badge>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <DialPad onDial={handleManualDial} disabled={!canMakeCalls} disabledReason={dialDisabledReason} />
+        </div>
+
+        {/* Center Panel */}
+        <div className="lg:col-span-5 space-y-4">
+          {manualCallActive ? (
+            manualMatchedContact ? (
+              <div className="space-y-2">
+                <Badge variant="outline" className="text-primary border-primary/30">Manual Call — Matched Contact</Badge>
+                <LeadCard lead={manualMatchedContact} />
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground">Notes (required)</label>
-                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+            ) : (
+              <Card>
+                <CardContent className="py-6 text-center space-y-2">
+                  <Badge variant="outline" className="text-primary border-primary/30 mb-2">Manual Call</Badge>
+                  <p className="text-lg font-mono text-foreground">{formatPhoneDisplay(manualDialedE164)}</p>
+                  <p className="text-xs text-muted-foreground">No saved contact found</p>
+                </CardContent>
+              </Card>
+            )
+          ) : (
+            <LeadCard lead={currentLead} />
+          )}
+
+          <Card>
+            <CardContent className="py-6">
+              <div className="flex items-center justify-center gap-4">
+                {!currentLead && !manualCallActive && !onCall ? (
+                  <Button size="lg" variant="outline" onClick={handleLoadNext} disabled={!campaignId || loading || !agentReady}>
+                    {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <ChevronRight className="w-5 h-5 mr-2" />}Next Lead
+                  </Button>
+                ) : !onCall ? (
+                  <>
+                    <Button size="lg" className="rounded-full w-16 h-16 bg-success hover:bg-success/90 text-success-foreground" onClick={handleStartCall} disabled={!canMakeCalls}>
+                      <Phone className="w-6 h-6" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={handleSkip}><SkipForward className="w-4 h-4 mr-1" />Skip</Button>
+                  </>
+                ) : (
+                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={handleEndCall}>
+                    <PhoneOff className="w-6 h-6" />
+                  </Button>
+                )}
               </div>
+              {onCall && (
+                <div className="flex items-center justify-center mt-4 gap-2">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-mono text-foreground">{formatTime(callTimer)}</span>
+                  {held && <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">ON HOLD</Badge>}
+                  {muted && <Badge variant="outline" className="text-destructive border-destructive/30 text-[10px]">MUTED</Badge>}
+                  {powerDialActive && <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">⚡ POWER</Badge>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <AudioControls muted={muted} held={held} onToggleMute={toggleMute} onToggleHold={toggleHold} callActive={callState === "active"} />
+          <DtmfPad onSend={sendDTMF} disabled={callState !== "active"} />
+          {(currentLead || manualMatchedContact) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button
+                variant="default"
+                className="w-full"
+                onClick={() => setShowAppointmentModal(true)}
+              >
+                <CalendarPlus className="w-4 h-4 mr-2" />
+                Add Appointment
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setShowTechApptModal(true)}
+              >
+                <CalendarPlus className="w-4 h-4 mr-2" />
+                Schedule Technician
+              </Button>
             </div>
+          )}
+          {!manualCallActive && <DispositionPanel disabled={!currentLead} onDispose={handleDispose} />}
+        </div>
 
-            <Button
-              onClick={saveAndUnlock}
-              disabled={saving || !disposition || !notes.trim() || callLocked}
-              className="w-full"
-            >
-              {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Save & Unlock Next Lead <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Right Panel */}
+        <div className="lg:col-span-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileText className="w-4 h-4" />Notes</CardTitle></CardHeader>
+            <CardContent>
+              <textarea className="w-full h-24 bg-muted/50 border border-border rounded-md p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring text-foreground"
+                placeholder="Add call notes..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">Contact Activity</CardTitle></CardHeader>
+            <CardContent>
+              <ContactActivityTimeline contactId={activeContactId} />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {showCallbackModal && currentLead && (
+        <CallbackModal contactId={currentLead.contact_id} contactName={`${currentLead.first_name} ${currentLead.last_name}`}
+          campaignId={campaignId} onClose={handleModalClose} onSaved={handleModalSaved} />
       )}
-
-      {assignments.length > 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm text-muted-foreground">
-              Locked — finish current lead first
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1">
-            {assignments.slice(1, 11).map((a) => (
-              <div key={a.id} className="flex items-center justify-between p-2 rounded bg-muted/30 text-sm">
-                <span className="flex items-center gap-2">
-                  <Lock className="w-3 h-3 text-muted-foreground" /> #{a.queue_position} {a.contact?.first_name} {a.contact?.last_name}
-                </span>
-                <span className="text-xs text-muted-foreground font-mono">{formatPhoneDisplay(a.contact?.phone_e164 || "")}</span>
-              </div>
-            ))}
-            {assignments.length > 11 && (
-              <p className="text-xs text-muted-foreground pt-1">+ {assignments.length - 11} more</p>
-            )}
-          </CardContent>
-        </Card>
+      {showAppointmentModal && (currentLead || manualMatchedContact) && (() => {
+        const lead = (currentLead || manualMatchedContact)!;
+        return (
+          <AppointmentModal
+            contactId={lead.contact_id}
+            contactName={`${lead.first_name} ${lead.last_name}`}
+            campaignId={campaignId}
+            callAttemptId={lastCallAttemptId}
+            contactAddress={lead.address}
+            contactCity={lead.city}
+            contactState={lead.state}
+            contactZip={lead.zip_code}
+            onClose={handleModalClose}
+            onSaved={handleModalSaved}
+          />
+        );
+      })()}
+      {showTechApptModal && (currentLead || manualMatchedContact) && (() => {
+        const lead = (currentLead || manualMatchedContact)!;
+        const addr = [lead.address, lead.city, lead.state, lead.zip_code].filter(Boolean).join(", ");
+        return (
+          <TechnicianAppointmentModal
+            open={showTechApptModal}
+            onOpenChange={setShowTechApptModal}
+            defaultContactId={lead.contact_id}
+            defaultContactLabel={`${lead.first_name} ${lead.last_name}`.trim()}
+            defaultLeadAddress={addr}
+            defaultCampaignId={campaignId}
+          />
+        );
+      })()}
+      {showWrapUp && currentLead && (
+        <WrapUpModal
+          open={showWrapUp}
+          contactId={currentLead.contact_id}
+          contactName={`${currentLead.first_name} ${currentLead.last_name}`}
+          contactAddress={currentLead.address}
+          contactCity={currentLead.city}
+          contactState={currentLead.state}
+          contactZip={currentLead.zip_code}
+          campaignId={campaignId}
+          callAttemptId={lastCallAttemptId}
+          callDuration={callDuration}
+          initialNotes={notes}
+          onClose={() => setShowWrapUp(false)}
+          onComplete={({ disposition, needsAppointmentModal, needsCallbackModal }) => {
+            setShowWrapUp(false);
+            if (needsAppointmentModal) { setPendingDisposition(disposition); setShowAppointmentModal(true); return; }
+            if (needsCallbackModal) { setPendingDisposition(disposition); setShowCallbackModal(true); return; }
+            handleDispose(disposition);
+          }}
+        />
       )}
     </div>
   );

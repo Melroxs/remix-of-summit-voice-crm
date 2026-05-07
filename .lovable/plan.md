@@ -1,57 +1,94 @@
-# Full Dialer Rebuild — Telnyx WebRTC
+## Technician Appointment Calendar
 
-This is a large rebuild. I'll keep all existing Summit Leads branding, sidebar, dark UI, cyan accents, role system, campaigns, and unrelated pages untouched. Only the systems below change.
+Add a new feature to schedule on-site technician appointments with skills matching, working hours awareness, and a visual calendar view. This complements the existing Appointments page (which tracks sales/closer appointments) by adding a dedicated technician dispatch layer.
 
-## Scope (in order)
+### What we'll build
 
-### 1. Secrets & Backend Foundation
-- Prompt to confirm/add Telnyx secrets: `TELNYX_API_KEY`, `TELNYX_CONNECTION_ID` (WebRTC Credential Connection ID), `TELNYX_OUTBOUND_VOICE_PROFILE_ID` (already set), `TELNYX_SIP_USERNAME`/`TELNYX_SIP_PASSWORD` (already set), `TELNYX_WEBHOOK_SECRET` (already set), `TELNYX_DEFAULT_FROM_NUMBER`.
-- New edge function `generate-telnyx-token` — auth-protected, mints a short-lived Telnyx on-demand credential token via Telnyx REST API; returns `{ login_token }` only. Never returns SIP password.
-- Rewrite `telnyx-webhook` to verify Ed25519 signature with `TELNYX_WEBHOOK_SECRET` and handle: `call.initiated`, `call.ringing`, `call.answered`, `call.hangup`, `call.recording.saved`. Persists state to `call_attempts` and `call_recordings`.
+**New page: `/technicians/calendar`** (admin + manager + team_leader access)
 
-### 2. Database
-Migration adds:
-- `daily_lead_assignments` table (campaign_id, contact_id, agent_id, assigned_by, assigned_date, queue_position, status, locked_at, locked_by, completed_at) with RLS: agents see own; admins/managers all.
-- `call_attempts` — verify columns: `telnyx_call_control_id`, `telnyx_call_session_id`, `from_number`, `to_number`, `call_status`, `started_at`, `answered_at`, `ended_at`, `recording_url`, `error_message`. Add any missing.
-- Unique index `(contact_id, assigned_date)` to prevent dup assignments.
-- RPC `lock_next_queue_lead(agent_id)` and `complete_queue_lead(assignment_id, disposition, notes)` for atomic lock/unlock.
+- **Technician roster panel** (left): list of technicians with name, skills (chips), home address, and working hours.
+- **Calendar view** (right): day / week toggle using `react-day-picker` + a custom time-grid. Each technician gets a column in week view; appointments render as colored blocks.
+- **Create / edit appointment dialog**: pick technician, lead (searchable from existing `contacts`), start/end time, address (defaults to lead address). Validates against:
+  - Technician working hours
+  - Required skill vs. technician skills
+  - Overlap with other appointments for the same technician
+- **Drag-to-reschedule** (phase 2 — not in this plan)
 
-### 3. Frontend Telnyx Client (rebuild)
-- Install `@telnyx/webrtc`.
-- New `src/lib/telnyx-client.ts` — singleton wrapper: init with token, login, ready/reconnect/error events, mic permission, makeCall/hangup/mute/unmute, cleanup on unmount.
-- New `src/hooks/use-telnyx-rtc.ts` — exposes connection state, current call state, controls. Replaces old `use-telnyx.ts`.
-- Delete old broken dialer logic: `src/hooks/use-telnyx.ts`, `src/components/dialer/AudioControls.tsx` (replaced), fake-call code paths in `Dialer.tsx`.
+### Data model (new tables)
 
-### 4. Pages — Admin Daily Lead Assignment
-- `/admin/daily-lead-assignment` — campaign select, agent multi-select, leads-per-agent input, preview table, confirm. Pulls unassigned leads (no row in `daily_lead_assignments` for today), distributes evenly, inserts rows.
+```text
+technicians
+  id, company_id, user_id (nullable, optional link to profiles)
+  name, home_address, phone, email
+  skills text[]                -- e.g. {'solar_install','roof_inspection'}
+  working_hours_start time     -- 08:00
+  working_hours_end time       -- 17:00
+  working_days int[]           -- 0=Sun..6=Sat, default {1,2,3,4,5}
+  is_active bool
+  created_at, updated_at
 
-### 5. Pages — Agent Calling Queue
-- `/agent/my-calling-queue` — today's assigned leads for `auth.uid()`, ordered by `queue_position`. First lead unlocked; rest greyed/locked. Start Dialing → Call (real Telnyx) → live state (connecting/ringing/active/ended) → require disposition + notes → Save & Unlock Next.
+technician_appointments
+  id, company_id
+  technician_id  -> technicians.id
+  contact_id     -> contacts.id (the lead)
+  campaign_id    -> campaigns.id (nullable)
+  appointment_id -> appointments.id (nullable, link to sales appointment)
+  lead_address text
+  start_time timestamptz
+  end_time   timestamptz
+  required_skill text
+  status: scheduled | en_route | on_site | completed | cancelled | no_show
+  notes text
+  created_by uuid
+  created_at, updated_at
+```
 
-### 6. Dialer Dashboard
-- Rebuild `src/pages/Dialer.tsx` to use new Telnyx client, show real states only. Real timer starts on `answered`. Buttons: Call / Hangup / Mute / Save Disposition / Save & Unlock Next. Inline latest recording playback after call ends.
+**RLS**: company-scoped via `is_same_company(company_id)` (matches existing pattern). Admins bypass. Agents read-only on technicians of their company; admins/managers/team_leaders full CRUD.
 
-### 7. Recordings
-- `src/pages/Recordings.tsx` — list rows from `call_recordings` joined with `call_attempts` + contact + agent + campaign. Inline `<audio>` player with play/pause, download, search, filters (agent, campaign, date, disposition, duration, phone).
+**Validation trigger** (not CHECK constraint, per project standards): ensure `end_time > start_time` and no overlapping technician_appointments for the same technician.
 
-### 8. Contacts Filters
-- Add advanced filter drawer to `src/pages/Contacts.tsx`: campaign, status, owner/agent, city, state, zip, county, area code, upload batch, created date, last called, disposition, appointment status, assigned/unassigned, owner/renter, credit rating, home value, household income.
+### Files to add
 
-### 9. Imports Batch Delete
-- `src/pages/Imports.tsx` — multi-select batches, bulk delete modal with two options: (A) delete upload record only, (B) delete upload record + imported contacts. Show affected contact count first. Preserves `call_attempts` unless explicitly confirmed.
+- `supabase/migrations/<ts>_technicians.sql` — tables, RLS, overlap-prevention trigger
+- `src/hooks/use-technicians.ts` — list/create/update/delete technicians
+- `src/hooks/use-technician-appointments.ts` — list by date range + mutations
+- `src/components/technicians/TechnicianModal.tsx` — create/edit technician
+- `src/components/technicians/TechnicianAppointmentModal.tsx` — create/edit appointment with skill + working-hours validation
+- `src/components/technicians/TechnicianWeekGrid.tsx` — time-grid (8am–6pm, 30-min slots, one column per technician)
+- `src/components/technicians/TechnicianDayView.tsx` — single-day all-tech view
+- `src/pages/TechnicianCalendar.tsx` — page shell with day/week toggle, technician filter, date picker, "New appointment" button
+- Route added in `src/App.tsx` under `RoleGuard` (admin/manager/team_leader)
+- Sidebar entry added in `src/components/layout/AppSidebar.tsx` under the operations section
 
-### 10. Diagnostics
-- `/admin/dialer-diagnostics` — checks: secrets present (server-side), Telnyx connected, mic granted, queue assigned, outbound number set, test-call button, webhook events received in last hour, recording received, call/disposition save flow.
+### TypeScript shape mapping
 
-### 11. Cleanup
-- Delete fake/mock dial behavior, unused telephony env code, old softphone bits in `Dialer.tsx`, `AudioControls.tsx`, `use-telnyx.ts`, `telnyx-config.ts` legacy paths.
+The user-provided types map to DB rows like this:
 
-## Non-Goals (untouched)
-Branding, sidebar, theme, campaigns CRUD, technician system, client portal, team dashboard, QA, training hub, follow-ups, callbacks page, appointments page, auth pages.
+```ts
+// Technician  (DB: technicians)
+//   id, name, home_address -> homeAddress, skills,
+//   working_hours_start/end -> workingHours.{start,end}
 
-## Risks / Notes
-- Telnyx on-demand-credentials API requires a Credential Connection in your Telnyx portal. I'll need `TELNYX_CONNECTION_ID` (the Credential Connection ID, not Voice API app).
-- This is ~15 file changes + 1 migration + 2 edge functions. I'll work in sequence and verify build after each major step.
+// Appointment (DB: technician_appointments)
+//   id, technician_id -> technicianId, lead_address -> leadAddress,
+//   start_time -> startTime, end_time -> endTime
 
-## Confirm to proceed
-Reply "go" and I'll start with secrets prompt + migration.
+// Lead — reuse existing contacts table
+//   contacts.id, contacts.address, plus optional required_skill stored on the appointment
+```
+
+We'll keep the user's camelCase types as the **UI/domain layer**, with thin mappers to/from snake_case Supabase rows — same pattern as `useAppointments`.
+
+### Out of scope (can follow up later)
+
+- Route optimisation between technician home address and lead address
+- Drag-and-drop rescheduling
+- Mobile technician app / check-in
+- SMS reminders to technicians
+- Public booking link
+
+### Open questions before building
+
+1. Should technicians be linked to existing `profiles` (so a technician can also log in), or kept as standalone records managed by admins?
+2. Should this calendar replace the existing `/appointments` page, live alongside it, or auto-create a technician appointment whenever a sales appointment is booked?
+3. Who should have access — admin only, or also managers and team_leaders?

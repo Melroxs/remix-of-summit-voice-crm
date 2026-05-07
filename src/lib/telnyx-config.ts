@@ -3,12 +3,11 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-export interface TelnyxCreds { login: string; password: string; default_from_number: string | null }
-let cachedCredentials: TelnyxCreds | null = null;
-let fetchPromise: Promise<TelnyxCreds | null> | null = null;
+let cachedCredentials: { login: string; password: string } | null = null;
+let fetchPromise: Promise<{ login: string; password: string } | null> | null = null;
 
 // Fetch WebRTC credentials from the backend
-export async function fetchTelnyxCredentials(): Promise<TelnyxCreds | null> {
+export async function fetchTelnyxCredentials(): Promise<{ login: string; password: string } | null> {
   if (cachedCredentials) return cachedCredentials;
   if (fetchPromise) return fetchPromise;
 
@@ -19,11 +18,7 @@ export async function fetchTelnyxCredentials(): Promise<TelnyxCreds | null> {
         console.warn("[Telnyx] Could not fetch credentials:", error || "missing fields");
         return null;
       }
-      cachedCredentials = {
-        login: data.login,
-        password: data.password,
-        default_from_number: data.default_from_number ?? null,
-      };
+      cachedCredentials = { login: data.login, password: data.password };
       return cachedCredentials;
     } catch (e) {
       console.warn("[Telnyx] Credential fetch failed:", e);
@@ -34,11 +29,6 @@ export async function fetchTelnyxCredentials(): Promise<TelnyxCreds | null> {
   })();
 
   return fetchPromise;
-}
-
-export async function getDefaultFromNumber(): Promise<string | null> {
-  const c = await fetchTelnyxCredentials();
-  return c?.default_from_number ?? null;
 }
 
 // Clear cached credentials (e.g. on logout)
