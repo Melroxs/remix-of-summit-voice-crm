@@ -38,6 +38,22 @@ export default function Contacts() {
   const [ownershipFilter, setOwnershipFilter] = useState<string>("all"); // all | locked | unlocked
   const [agents, setAgents] = useState<Record<string, string>>({}); // user_id -> display_name
 
+  // Advanced filters
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [cityFilter, setCityFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [zipFilter, setZipFilter] = useState("");
+  const [countyFilter, setCountyFilter] = useState("");
+  const [areaCodeFilter, setAreaCodeFilter] = useState("");
+  const [ownerRenterFilter, setOwnerRenterFilter] = useState("all");
+  const [creditFilter, setCreditFilter] = useState("");
+  const [homeValueFilter, setHomeValueFilter] = useState("");
+  const [householdIncomeFilter, setHouseholdIncomeFilter] = useState("");
+  const [createdFromFilter, setCreatedFromFilter] = useState("");
+  const [createdToFilter, setCreatedToFilter] = useState("");
+  const [importBatchFilter, setImportBatchFilter] = useState<string>("all");
+  const [importBatches, setImportBatches] = useState<{ id: string; filename: string }[]>([]);
+
   // Per-contact ops data (attempts, last_call, next_callback) keyed by contact_id
   const [opsData, setOpsData] = useState<Record<string, { attempts: number; last_called_at: string | null; next_callback_at: string | null }>>({});
 
@@ -73,6 +89,40 @@ export default function Contacts() {
     } else if (ownershipFilter === "unlocked") {
       query = query.is("locked_to_agent_id", null);
       countQuery = countQuery.is("locked_to_agent_id", null);
+    }
+    const applyText = (col: string, val: string) => {
+      if (!val.trim()) return;
+      query = query.ilike(col, `%${val.trim()}%`);
+      countQuery = countQuery.ilike(col, `%${val.trim()}%`);
+    };
+    applyText("city", cityFilter);
+    applyText("state", stateFilter);
+    applyText("zip_code", zipFilter);
+    applyText("county", countyFilter);
+    applyText("credit_rating", creditFilter);
+    applyText("home_value", homeValueFilter);
+    applyText("household_income", householdIncomeFilter);
+    if (areaCodeFilter.trim()) {
+      const ac = areaCodeFilter.replace(/\D/g, "");
+      const pat = `+1${ac}%`;
+      query = query.ilike("phone_e164", pat);
+      countQuery = countQuery.ilike("phone_e164", pat);
+    }
+    if (ownerRenterFilter !== "all") {
+      query = query.eq("owner_renter", ownerRenterFilter);
+      countQuery = countQuery.eq("owner_renter", ownerRenterFilter);
+    }
+    if (createdFromFilter) {
+      query = query.gte("created_at", createdFromFilter);
+      countQuery = countQuery.gte("created_at", createdFromFilter);
+    }
+    if (createdToFilter) {
+      query = query.lte("created_at", createdToFilter);
+      countQuery = countQuery.lte("created_at", createdToFilter);
+    }
+    if (importBatchFilter !== "all") {
+      query = query.eq("lead_import_id", importBatchFilter);
+      countQuery = countQuery.eq("lead_import_id", importBatchFilter);
     }
     if (campaignFilter !== "all") {
       const { data: links } = await supabase
@@ -132,13 +182,25 @@ export default function Contacts() {
       setOpsData({});
     }
     setLoading(false);
-  }, [search, page, statusFilter, campaignFilter, ownershipFilter]);
+  }, [
+    search, page, statusFilter, campaignFilter, ownershipFilter,
+    cityFilter, stateFilter, zipFilter, countyFilter, areaCodeFilter,
+    ownerRenterFilter, creditFilter, homeValueFilter, householdIncomeFilter,
+    createdFromFilter, createdToFilter, importBatchFilter,
+  ]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
-  useEffect(() => { setPage(0); }, [search, statusFilter, campaignFilter, ownershipFilter]);
+  useEffect(() => { setPage(0); }, [
+    search, statusFilter, campaignFilter, ownershipFilter,
+    cityFilter, stateFilter, zipFilter, countyFilter, areaCodeFilter,
+    ownerRenterFilter, creditFilter, homeValueFilter, householdIncomeFilter,
+    createdFromFilter, createdToFilter, importBatchFilter,
+  ]);
 
   useEffect(() => {
     supabase.from("campaigns").select("id, name").order("name").then(({ data }) => setCampaigns(data || []));
+    supabase.from("lead_imports").select("id, filename").order("created_at", { ascending: false }).limit(100)
+      .then(({ data }) => setImportBatches((data as any) || []));
   }, []);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
@@ -287,7 +349,45 @@ export default function Contacts() {
                 <SelectItem value="unlocked">Available</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={() => setShowAdvanced((v) => !v)}>
+              <Filter className="w-3 h-3 mr-1" /> {showAdvanced ? "Hide" : "More"} filters
+            </Button>
           </div>
+          {showAdvanced && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-3 border-t border-border mt-3">
+              <Input placeholder="City" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)} />
+              <Input placeholder="State" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} />
+              <Input placeholder="ZIP" value={zipFilter} onChange={(e) => setZipFilter(e.target.value)} />
+              <Input placeholder="County" value={countyFilter} onChange={(e) => setCountyFilter(e.target.value)} />
+              <Input placeholder="Area code (e.g. 480)" value={areaCodeFilter} onChange={(e) => setAreaCodeFilter(e.target.value)} />
+              <Select value={ownerRenterFilter} onValueChange={setOwnerRenterFilter}>
+                <SelectTrigger><SelectValue placeholder="Owner / Renter" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Owner / Renter (any)</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="renter">Renter</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input placeholder="Credit rating" value={creditFilter} onChange={(e) => setCreditFilter(e.target.value)} />
+              <Input placeholder="Home value" value={homeValueFilter} onChange={(e) => setHomeValueFilter(e.target.value)} />
+              <Input placeholder="Household income" value={householdIncomeFilter} onChange={(e) => setHouseholdIncomeFilter(e.target.value)} />
+              <Select value={importBatchFilter} onValueChange={setImportBatchFilter}>
+                <SelectTrigger><SelectValue placeholder="Upload batch" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All upload batches</SelectItem>
+                  {importBatches.map((b) => <SelectItem key={b.id} value={b.id}>{b.filename}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Created from</label>
+                <Input type="date" value={createdFromFilter} onChange={(e) => setCreatedFromFilter(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Created to</label>
+                <Input type="date" value={createdToFilter} onChange={(e) => setCreatedToFilter(e.target.value)} />
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-0">
           <Table>
