@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { TelnyxRTC } from "@telnyx/webrtc";
+import { acquireTelnyxLock, releaseTelnyxLock } from "@/lib/telnyx-singleton";
 
 export type CallStatus =
   | "idle"
@@ -49,6 +50,11 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
     if (attemptsRef.current >= 3) {
       setConnectionStatus("error");
       setError("Failed to connect after 3 attempts. Click Reconnect to retry.");
+      return;
+    }
+    if (!acquireTelnyxLock("dialer-v2")) {
+      setConnectionStatus("error");
+      setError("Another dialer tab/page is already connected. Close it and click Reconnect.");
       return;
     }
     connectingRef.current = true;
@@ -224,6 +230,7 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
       callRef.current?.hangup();
       clientRef.current?.disconnect();
       clientRef.current = null;
+      releaseTelnyxLock("dialer-v2");
     };
   }, []);
 
