@@ -23,6 +23,7 @@ import {
   GraduationCap,
   ListTodo,
   Wrench,
+  PhoneCall,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,6 +53,7 @@ const allNavItems: NavItem[] = [
   { to: "/tasks", icon: ListTodo, label: "Follow-ups", roles: ["admin", "agent", "team_leader"] },
   { to: "/training", icon: GraduationCap, label: "Training Hub", roles: ["admin", "agent", "team_leader"] },
   { to: "/recordings", icon: Disc3, label: "Recordings", roles: ["admin"] },
+  { to: "/call-logs", icon: PhoneCall, label: "Call Logs", roles: ["admin", "team_leader", "manager"] },
   { to: "/reports", icon: BarChart3, label: "Reports", roles: ["admin"] },
   { to: "/users", icon: UserCog, label: "Users", roles: ["admin"] },
   { to: "/settings", icon: Settings, label: "Settings", roles: ["admin"] },
