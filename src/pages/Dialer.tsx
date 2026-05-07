@@ -162,7 +162,29 @@ export default function Dialer() {
 
   const activeContactId = currentLead?.contact_id || manualMatchedContact?.contact_id || null;
 
-  const getOutboundCallerId = useCallback(async (): Promise<string | null> => {
+  /**
+   * Reserve an outbound caller ID using the atomic local-presence RPC.
+   * Falls back to the legacy campaign phone pool if the new pool is empty
+   * or the lead phone isn't a valid US number.
+   */
+  const getOutboundCallerId = useCallback(async (leadPhone?: string | null): Promise<string | null> => {
+    if (leadPhone && /^\+1\d{10}$/.test(leadPhone)) {
+      try {
+        const { data, error } = await supabase.rpc(
+          "fn_get_and_reserve_caller_id" as any,
+          { lead_phone: leadPhone }
+        );
+        const row: any = Array.isArray(data) ? data[0] : data;
+        if (!error && row?.phone_number) {
+          setLastOutboundNumber(row.phone_number);
+          console.log(`[Dialer] 📞 Reserved caller ID ${row.phone_number} (${row.match_type})`);
+          return row.phone_number;
+        }
+        if (error) console.warn("[Dialer] reserve RPC failed, falling back:", error.message);
+      } catch (e) {
+        console.warn("[Dialer] reserve RPC threw, falling back:", e);
+      }
+    }
     const poolNumber = await getNextOutboundNumber();
     if (poolNumber) {
       markUsed(poolNumber.id);
@@ -190,7 +212,7 @@ export default function Dialer() {
     const timer = setTimeout(async () => {
       if (onCall) return;
       console.log(`[Dialer] ⚡ Auto-dialing ${currentLead.first_name} ${currentLead.last_name}`);
-      await getOutboundCallerId();
+      await getOutboundCallerId(phone);
       makeCall(phone);
     }, 800);
     return () => clearTimeout(timer);
@@ -210,7 +232,7 @@ export default function Dialer() {
     if (!agentReady) { toast({ title: "Not ready", variant: "destructive" }); return; }
     const phone = currentLead.phone_e164 || currentLead.phone_raw;
     if (!phone) { toast({ title: "No phone number", variant: "destructive" }); return; }
-    await getOutboundCallerId();
+    await getOutboundCallerId(phone);
     makeCall(phone);
   }, [currentLead, agentReady, makeCall, getOutboundCallerId]);
 
@@ -234,7 +256,7 @@ export default function Dialer() {
         });
       } else { setManualMatchedContact(null); }
     } catch { setManualMatchedContact(null); }
-    await getOutboundCallerId();
+    await getOutboundCallerId(e164);
     makeCall(e164);
   }, [canMakeCalls, makeCall, getOutboundCallerId]);
 
