@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { formatPhoneDisplay } from "@/lib/phone";
+import { getDefaultFromNumber } from "@/lib/telnyx-config";
 
 interface Assignment {
   id: string;
@@ -147,10 +148,18 @@ export default function Dialer() {
     setRecording({ url: null, id: null });
     setDisposition(""); setNotes(""); setCallAttemptId(null);
     try {
-      const callerNumber = (import.meta.env.VITE_TELNYX_DEFAULT_FROM_NUMBER as string) || "";
+      const callerNumber = (await getDefaultFromNumber()) || "";
+      if (!callerNumber) {
+        toast({
+          title: "No caller ID configured",
+          description: "TELNYX_DEFAULT_FROM_NUMBER is not set on the backend.",
+          variant: "destructive",
+        });
+        return;
+      }
       const callId = await makeCall({
         destinationNumber: active.contact.phone_e164,
-        callerNumber: callerNumber || active.contact.phone_e164,
+        callerNumber,
       });
       const { data, error } = await supabase.functions.invoke("register-webrtc-call", {
         body: {
@@ -158,7 +167,7 @@ export default function Dialer() {
           contact_id: active.contact_id,
           telnyx_call_id: callId,
           to_number: active.contact.phone_e164,
-          from_number: callerNumber || null,
+          from_number: callerNumber,
           assignment_id: active.id,
         },
       });
