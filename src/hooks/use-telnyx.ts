@@ -120,9 +120,15 @@ export function useTelnyx(options: UseTelnyxOptions = {}) {
         client.on("telnyx.error", (e: any) => {
           console.warn("[Telnyx] client error", e);
           if (cancelled) return;
+          const inner = e?.error;
+          const msg =
+            (typeof inner === "string" && inner) ||
+            inner?.message ||
+            e?.message ||
+            "Telnyx connection error";
           setConnectionState("error");
-          setErrorMessage(e?.error || e?.message || "Telnyx connection error");
-          optsRef.current.onError?.(e?.error || e?.message || "Telnyx error");
+          setErrorMessage(typeof msg === "string" ? msg : String(msg));
+          optsRef.current.onError?.(typeof msg === "string" ? msg : String(msg));
         });
         client.on("telnyx.socket.close", () => {
           if (cancelled) return;
