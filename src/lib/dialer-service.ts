@@ -164,6 +164,9 @@ export async function createOutboundCall(_args: {
 }
 
 /** Predictive engine removed — agents drive calls manually from the daily queue. */
-export async function tickPredictiveEngine(_campaignId: string): Promise<never> {
+export async function tickPredictiveEngine(_campaignId: string): Promise<{
+  placed: number; target: number; available_agents: number; active_calls: number;
+  pacing_ratio: number; connect_rate?: number; abandon_rate?: number;
+}> {
   throw new Error("Predictive dialer engine has been removed.");
 }
