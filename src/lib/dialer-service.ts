@@ -121,14 +121,20 @@ export function validateCreateOutboundCall(args: {
   }
 }
 
-/** Power dialer: pull the next eligible lead for the current agent on a campaign. */
+/** Power dialer: pull the next eligible lead for the current agent on a campaign.
+ *  Replaced server-side picker with the daily-queue RPC. */
 export async function getNextLead(campaignId: string): Promise<NextLead | null> {
   assertUuid(campaignId, "campaign_id");
-  const { data, error } = await supabase.functions.invoke("power-dialer-next", {
-    body: { campaign_id: campaignId },
+  const { data: session } = await supabase.auth.getSession();
+  const agentId = session?.session?.user?.id;
+  if (!agentId) return null;
+  const { data, error } = await supabase.rpc("lock_next_daily_assignment", {
+    _agent_id: agentId,
+    _campaign_id: campaignId,
   });
   if (error) throw error;
-  return data?.contact ?? null;
+  if (!data) return null;
+  return data as unknown as NextLead;
 }
 
 /** Apply disposition to a finished call. */
@@ -147,40 +153,17 @@ export async function completeDialAttempt(
   if (error) throw error;
 }
 
-/** Server-side outbound call origination (used by predictive mode). */
-export async function createOutboundCall(args: {
+/** Server-side originate is no longer used — calls are placed via Telnyx WebRTC in-browser. */
+export async function createOutboundCall(_args: {
   campaignId: string;
   contactId: string;
   agentId?: string;
   fromNumber?: string;
-}): Promise<{ call_attempt_id: string; telnyx_call_control_id: string; from: string; to: string }> {
-  validateCreateOutboundCall(args);
-  const { data, error } = await supabase.functions.invoke("telnyx-create-call", {
-    body: {
-      campaign_id: args.campaignId,
-      contact_id: args.contactId,
-      agent_id: args.agentId,
-      from_number: args.fromNumber,
-    },
-  });
-  if (error) throw error;
-  return data;
+}): Promise<never> {
+  throw new Error("createOutboundCall is deprecated — use the WebRTC dialer (useTelnyx) to place calls.");
 }
 
-/** Manually tick the predictive engine for a campaign. (Normally cron-driven.) */
-export async function tickPredictiveEngine(campaignId: string) {
-  assertUuid(campaignId, "campaign_id");
-  const { data, error } = await supabase.functions.invoke("predictive-dialer-engine", {
-    body: { campaign_id: campaignId },
-  });
-  if (error) throw error;
-  return data as {
-    placed: number;
-    target: number;
-    available_agents: number;
-    active_calls: number;
-    pacing_ratio: number;
-    connect_rate?: number;
-    abandon_rate?: number;
-  };
+/** Predictive engine removed — agents drive calls manually from the daily queue. */
+export async function tickPredictiveEngine(_campaignId: string): Promise<never> {
+  throw new Error("Predictive dialer engine has been removed.");
 }
