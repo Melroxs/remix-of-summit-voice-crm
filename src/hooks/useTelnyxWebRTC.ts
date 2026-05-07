@@ -30,6 +30,8 @@ interface UseTelnyxWebRTCReturn {
 export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
   const clientRef = useRef<TelnyxRTC | null>(null);
   const callRef = useRef<any>(null);
+  const attemptsRef = useRef(0);
+  const connectingRef = useRef(false);
 
   const [callStatus, setCallStatus] = useState<CallStatus>("idle");
   const [connectionStatus, setConnectionStatus] = useState<
@@ -42,6 +44,14 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
 
   const initializeTelnyx = useCallback(async () => {
     if (clientRef.current) return;
+    if (connectingRef.current) return;
+    if (attemptsRef.current >= 3) {
+      setConnectionStatus("error");
+      setError("Failed to connect after 3 attempts. Click Reconnect to retry.");
+      return;
+    }
+    connectingRef.current = true;
+    attemptsRef.current += 1;
 
     setConnectionStatus("connecting");
     setCallStatus("initializing");
@@ -72,6 +82,8 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
       client.on("telnyx.ready", () => {
         setConnectionStatus("connected");
         setCallStatus("ready");
+        attemptsRef.current = 0;
+        connectingRef.current = false;
       });
 
       client.on("telnyx.error", (err: any) => {
@@ -79,11 +91,15 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
         setConnectionStatus("error");
         setCallStatus("failed");
         setError(err?.message ?? "Telnyx connection error");
+        connectingRef.current = false;
+        clientRef.current = null;
       });
 
       client.on("telnyx.socket.close", () => {
         setConnectionStatus("disconnected");
         setCallStatus("idle");
+        connectingRef.current = false;
+        clientRef.current = null;
       });
 
       client.on("telnyx.notification", (notification: any) => {
@@ -129,8 +145,18 @@ export function useTelnyxWebRTC(): UseTelnyxWebRTCReturn {
       setConnectionStatus("error");
       setCallStatus("failed");
       setError(err?.message ?? "Failed to initialize Telnyx");
+      connectingRef.current = false;
+      clientRef.current = null;
     }
   }, []);
+
+  const reconnect = useCallback(() => {
+    attemptsRef.current = 0;
+    connectingRef.current = false;
+    clientRef.current?.disconnect();
+    clientRef.current = null;
+    initializeTelnyx();
+  }, [initializeTelnyx]);
 
   const makeCall = useCallback((toNumber: string, fromNumber: string) => {
     if (!clientRef.current) {
