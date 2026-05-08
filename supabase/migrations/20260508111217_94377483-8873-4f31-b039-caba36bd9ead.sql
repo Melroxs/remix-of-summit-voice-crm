@@ -1,0 +1,1 @@
+ALTER TABLE public.call_recordings ADD COLUMN IF NOT EXISTS connection_id text;
