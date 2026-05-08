@@ -129,10 +129,10 @@ export default function Dialer() {
   const isRegistered = false;
   const isCallActive = false;
   const callDuration = 0;
-  const connectionStatus: "disconnected" | "connecting" | "connected" = "disconnected";
-  const connectionState: "disconnected" | "connecting" | "connected" | "not_configured" | "error" = "disconnected";
+  const connectionStatus = "disconnected" as string;
+  const connectionState = "disconnected" as string;
   const clientReady = false;
-  const callState: "idle" | "ringing" | "connecting" | "active" | "ended" = "idle";
+  const callState = "idle" as string;
   const muted = false;
   const held = false;
   const errorMessage: string | null = null;
