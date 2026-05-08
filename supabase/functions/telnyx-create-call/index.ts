@@ -47,6 +47,52 @@ Deno.serve(async (req) => {
       return json({ error: "destinationNumber and callerNumber are required" }, 400);
     }
 
+    // --- Local presence number selection ---
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    // Extract the 3-digit area code from a US E.164 number (+1AAA...).
+    const digits = String(destinationNumber).replace(/[^\d]/g, "");
+    const destAreaCode =
+      digits.length === 11 && digits.startsWith("1")
+        ? digits.slice(1, 4)
+        : digits.slice(-10, -7);
+
+    let fromNumber: string = callerNumber;
+    let selectionReason: "local_match" | "fallback" = "fallback";
+
+    if (campaignId && destAreaCode.length === 3) {
+      const { data: poolMatch, error: poolErr } = await admin
+        .from("campaign_phone_numbers")
+        .select("phone_number, health_score")
+        .eq("campaign_id", campaignId)
+        .eq("area_code", destAreaCode)
+        .eq("is_active", true)
+        .gt("health_score", 50)
+        .order("health_score", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (poolErr) {
+        console.error("[telnyx-create-call] pool lookup error:", poolErr.message);
+      } else if (poolMatch?.phone_number) {
+        fromNumber = poolMatch.phone_number;
+        selectionReason = "local_match";
+      }
+    }
+
+    // Log the selection decision (best-effort).
+    const { error: logErr } = await admin.from("dialer_logs").insert({
+      campaign_id: campaignId,
+      destination_number: destinationNumber,
+      selected_number: fromNumber,
+      selection_reason: selectionReason,
+    });
+    if (logErr) {
+      console.error("[telnyx-create-call] dialer_logs insert error:", logErr.message);
+    }
+
     // --- Telnyx ---
     const apiKey = Deno.env.get("TELNYX_API_KEY");
     const connectionId = Deno.env.get("TELNYX_CONNECTION_ID");
@@ -63,7 +109,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         connection_id: connectionId,
         to: destinationNumber,
-        from: callerNumber,
+        from: fromNumber,
         record_audio: true,
       }),
     });
@@ -77,16 +123,12 @@ Deno.serve(async (req) => {
     const callControlId: string | null = telnyxData?.data?.call_control_id ?? null;
 
     // --- Log call attempt (service role to bypass RLS quirks) ---
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
     const { error: insertErr } = await admin.from("call_attempts").insert({
       agent_id: agentId,
       contact_id: contactId,
       campaign_id: campaignId,
       telnyx_call_control_id: callControlId,
-      from_number: callerNumber,
+      from_number: fromNumber,
       to_number: destinationNumber,
       started_at: new Date().toISOString(),
       provider_used: "telnyx",
