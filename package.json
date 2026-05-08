@@ -43,7 +43,7 @@
     "@radix-ui/react-tooltip": "^1.2.7",
     "@supabase/supabase-js": "^2.100.1",
     "@tanstack/react-query": "^5.83.0",
-    "@telnyx/webrtc": "^2.25.25",
+    "@telnyx/webrtc": "^2.26.4",
     "@types/leaflet": "^1.9.21",
     "@types/papaparse": "^5.5.2",
     "class-variance-authority": "^0.7.1",
