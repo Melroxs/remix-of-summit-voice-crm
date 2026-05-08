@@ -24,6 +24,7 @@ import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { formatPhoneDisplay } from "@/lib/phone";
 import LeadCard from "@/components/dialer/LeadCard";
 import CallHistoryPanel from "@/components/dialer/CallHistoryPanel";
+import CallTimeline from "@/components/dialer/CallTimeline";
 import ScriptDrawer from "@/components/dialer/ScriptDrawer";
 import ContactActivityTimeline from "@/components/dialer/ContactActivityTimeline";
 import DispositionPanel from "@/components/dialer/DispositionPanel";
@@ -135,6 +136,8 @@ export default function Dialer() {
     callDuration,
     connectionStatus,
     awaitingDisposition,
+    callTimeline,
+    telnyxCallId,
     connect,
     dial,
     hangUp,
@@ -594,6 +597,8 @@ export default function Dialer() {
           )}
 
           <CallHistoryPanel contactId={activeContactId} />
+
+          <CallTimeline entries={callTimeline} telnyxCallId={telnyxCallId} />
 
           <Card>
             <CardContent className="py-6">
