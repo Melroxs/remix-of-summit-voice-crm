@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { KeyRound, Plug, PlugZap, Loader2 } from "lucide-react";
+import { KeyRound, Plug, PlugZap, Loader2, ShieldCheck, CheckCircle2, XCircle } from "lucide-react";
 
 type RegStatus = "idle" | "connecting" | "connected" | "error";
+type CredCheck = { name: string; ok: boolean; detail: string };
 
 export default function TelnyxTokenTest() {
   const { toast } = useToast();
@@ -16,6 +17,9 @@ export default function TelnyxTokenTest() {
   const [regStatus, setRegStatus] = useState<RegStatus>("idle");
   const [regError, setRegError] = useState<string | null>(null);
   const [client, setClient] = useState<TelnyxRTC | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [credChecks, setCredChecks] = useState<CredCheck[] | null>(null);
+  const [credAllOk, setCredAllOk] = useState<boolean | null>(null);
 
   const requestToken = async () => {
     setFetching(true);
@@ -37,6 +41,36 @@ export default function TelnyxTokenTest() {
       });
     } finally {
       setFetching(false);
+    }
+  };
+
+  const verifyCredentials = async () => {
+    setVerifying(true);
+    setCredChecks(null);
+    setCredAllOk(null);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "telnyx-verify-credentials",
+        { body: {} },
+      );
+      if (error) throw error;
+      setCredChecks(data?.checks ?? []);
+      setCredAllOk(!!data?.ok);
+      toast({
+        title: data?.ok ? "All credentials valid" : "Some checks failed",
+        description: data?.ok
+          ? "Telnyx API, connection, credential, and webhook key are good."
+          : "Review the results below for details.",
+        variant: data?.ok ? "default" : "destructive",
+      });
+    } catch (err: any) {
+      toast({
+        title: "Verification failed",
+        description: err?.message || String(err),
+        variant: "destructive",
+      });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -145,6 +179,59 @@ export default function TelnyxTokenTest() {
           )}
           {regStatus === "error" && regError && (
             <p className="text-xs text-destructive">❌ {regError}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+            <CardTitle className="text-lg">3. Verify Backend Credentials</CardTitle>
+          </div>
+          {credAllOk !== null && (
+            <Badge
+              variant="outline"
+              className={`text-xs ${
+                credAllOk
+                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                  : "bg-destructive/15 text-destructive border-destructive/30"
+              }`}
+            >
+              {credAllOk ? "All OK" : "Issues found"}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Confirms every Telnyx secret is set and that the API key, connection, credential ID,
+            voice profile, and ed25519 webhook public key are valid by calling Telnyx.
+          </p>
+          <Button onClick={verifyCredentials} disabled={verifying}>
+            {verifying ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying…</>
+            ) : (
+              "Verify Credentials"
+            )}
+          </Button>
+          {credChecks && credChecks.length > 0 && (
+            <div className="rounded-md border border-border divide-y divide-border">
+              {credChecks.map((c, i) => (
+                <div key={i} className="flex items-start gap-3 px-3 py-2 text-xs">
+                  {c.ok ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-mono text-foreground truncate">{c.name}</p>
+                    <p className={`text-[11px] ${c.ok ? "text-muted-foreground" : "text-destructive"}`}>
+                      {c.detail}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
