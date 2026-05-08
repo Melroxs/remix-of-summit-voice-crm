@@ -33,6 +33,26 @@ export const CONTACT_FIELDS = [
 
 export type ColumnMapping = Record<string, string>; // csv_header -> contact_field_key
 
+/**
+ * Custom-field mappings use the prefix `custom:` followed by the destination
+ * key inside `contacts.custom_fields`. Example: `custom:roof_age`.
+ */
+export const CUSTOM_FIELD_PREFIX = "custom:";
+export function isCustomField(fieldKey: string): boolean {
+  return fieldKey.startsWith(CUSTOM_FIELD_PREFIX);
+}
+export function customFieldName(fieldKey: string): string {
+  return fieldKey.slice(CUSTOM_FIELD_PREFIX.length);
+}
+export function makeCustomFieldKey(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return CUSTOM_FIELD_PREFIX + (slug || "field");
+}
+
 export function parseCSV(file: File): Promise<{ headers: string[]; rows: Record<string, string>[]; }> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
@@ -176,6 +196,7 @@ export async function dryRunImport(
 /** Map a CSV row through the user mapping, splitting `full_name` and parsing tags. */
 function mapRow(row: Record<string, string>, mapping: ColumnMapping): Record<string, any> {
   const contact: Record<string, any> = {};
+  const custom_fields: Record<string, string> = {};
   for (const [csvHeader, fieldKey] of Object.entries(mapping)) {
     if (!fieldKey || row[csvHeader] === undefined) continue;
     const raw = (row[csvHeader] || "").trim();
@@ -191,9 +212,14 @@ function mapRow(row: Record<string, string>, mapping: ColumnMapping): Record<str
       }
     } else if (fieldKey === "tags") {
       contact.tags = raw.split(/[,;|]/).map((t) => t.trim()).filter(Boolean);
+    } else if (isCustomField(fieldKey)) {
+      custom_fields[customFieldName(fieldKey)] = raw;
     } else {
       contact[fieldKey] = raw;
     }
+  }
+  if (Object.keys(custom_fields).length > 0) {
+    contact.custom_fields = custom_fields;
   }
   return contact;
 }
