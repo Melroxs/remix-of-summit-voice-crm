@@ -467,6 +467,21 @@ export default function Dialer() {
             </CardContent>
           </Card>
 
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { label: "Assigned Today", value: dailyTotalAssigned },
+              { label: "Contacted", value: dailyContactedToday },
+              { label: "Remaining", value: dailyRemainingToday },
+            ].map((s) => (
+              <Card key={s.label}>
+                <CardContent className="p-3 text-center">
+                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.label}</div>
+                  <div className="text-lg font-semibold text-foreground mt-1">{s.value}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
           {campaignId && (
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm">Queue Info</CardTitle></CardHeader>
