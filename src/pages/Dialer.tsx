@@ -279,8 +279,8 @@ export default function Dialer() {
         });
       } else { setManualMatchedContact(null); }
     } catch { setManualMatchedContact(null); }
-    await getOutboundCallerId();
-    makeCall(e164);
+    const from = await getOutboundCallerId();
+    makeCall(e164, from || undefined);
   }, [canMakeCalls, makeCall, getOutboundCallerId]);
 
   const handleEndCall = () => { hangup(); };
