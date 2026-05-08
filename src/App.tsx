@@ -34,6 +34,7 @@ const TrainingHub = lazy(() => import("@/pages/TrainingHub"));
 const FollowUpTasks = lazy(() => import("@/pages/FollowUpTasks"));
 const TechnicianCalendar = lazy(() => import("@/pages/TechnicianCalendar"));
 const TechnicianDashboard = lazy(() => import("@/pages/TechnicianDashboard"));
+const LeadAssignment = lazy(() => import("@/pages/LeadAssignment"));
 
 const queryClient = new QueryClient();
 
@@ -142,6 +143,9 @@ const App = () => (
                 } />
                 <Route path="/users" element={
                   <RoleGuard allowedRoles={["admin"]}><UserManagement /></RoleGuard>
+                } />
+                <Route path="/lead-assignment" element={
+                  <RoleGuard allowedRoles={["admin"]}><LeadAssignment /></RoleGuard>
                 } />
 
                 <Route path="/team-dashboard" element={
