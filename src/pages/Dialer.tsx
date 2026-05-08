@@ -160,7 +160,8 @@ export default function Dialer() {
   const isConnected = isRegistered;
   const hangup = hangUp;
   const handleHangUp = hangUp;
-  const makeCall: (..._args: any[]) => void = (n: string) => dial(n, "");
+  const makeCall: (..._args: any[]) => void = (n: string, from?: string) =>
+    dial(n, from || lastOutboundNumber || "");
 
   // Features not yet exposed by useTelnyxDialer — keep harmless defaults so
   // the existing UI keeps rendering without layout/markup changes.
