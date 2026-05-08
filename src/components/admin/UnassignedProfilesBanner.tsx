@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 /**
@@ -47,11 +47,11 @@ export default function UnassignedProfilesBanner() {
       return;
     }
     setWorking(true);
-    const { error, count: updated } = await supabase
+    const previousCount = count;
+    const { error } = await supabase
       .from("profiles")
       .update({ company_id: targetId } as never)
-      .is("company_id", null)
-      .select("user_id", { count: "exact", head: true });
+      .is("company_id", null);
     setWorking(false);
     if (error) {
       toast({ title: "Reassign failed", description: error.message, variant: "destructive" });
@@ -59,8 +59,7 @@ export default function UnassignedProfilesBanner() {
     }
     toast({
       title: "Profiles reassigned",
-      description: `${updated ?? count} user${(updated ?? count) === 1 ? "" : "s"} moved to ${target?.name ?? "company"}.`,
-      icon: <CheckCircle2 className="w-4 h-4 text-primary" />,
+      description: `${previousCount} user${previousCount === 1 ? "" : "s"} moved to ${target?.name ?? "company"}.`,
     });
     await refresh();
   };
