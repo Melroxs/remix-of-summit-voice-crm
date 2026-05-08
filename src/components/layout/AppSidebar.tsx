@@ -24,6 +24,7 @@ import {
   ListTodo,
   Wrench,
   CalendarDays,
+  UserPlus,
 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -57,6 +58,7 @@ const allNavItems: NavItem[] = [
   { to: "/recordings", icon: Disc3, label: "Recordings", roles: ["admin"] },
   { to: "/reports", icon: BarChart3, label: "Reports", roles: ["admin"] },
   { to: "/users", icon: UserCog, label: "Users", roles: ["admin"] },
+  { to: "/lead-assignment", icon: UserPlus, label: "Lead Assignment", roles: ["admin"] },
   { to: "/settings", icon: Settings, label: "Settings", roles: ["admin"] },
   { to: "/team-dashboard", icon: Headphones, label: "Team Monitor", roles: ["admin", "team_leader"] },
   { to: "/qa-dashboard", icon: Star, label: "QA Scoring", roles: ["admin", "team_leader"] },
