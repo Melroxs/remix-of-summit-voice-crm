@@ -2739,6 +2739,10 @@ export type Database = {
         Args: { p_agent_id: string; p_campaign_id: string; p_quantity: number }
         Returns: number
       }
+      can_subscribe_realtime_topic: {
+        Args: { _topic: string }
+        Returns: boolean
+      }
       complete_dial_attempt: {
         Args: {
           _call_attempt_id: string

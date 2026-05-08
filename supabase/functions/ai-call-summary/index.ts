@@ -22,12 +22,48 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Require an authenticated caller.
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ error: "Unauthorized" }, 401);
+    }
+    const userClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } },
+    );
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsErr } = await userClient.auth.getClaims(token);
+    if (claimsErr || !claimsData?.claims?.sub) {
+      return json({ error: "Unauthorized" }, 401);
+    }
+    const userId = claimsData.claims.sub as string;
+
     const body = await req.json().catch(() => null);
     const callAttemptId: string | undefined = body?.callAttemptId;
     const transcript: string | undefined = body?.transcript;
 
     if (!callAttemptId || typeof transcript !== "string" || !transcript.trim()) {
       return json({ error: "callAttemptId and transcript are required" }, 400);
+    }
+
+    // Verify the caller is the agent for this call attempt OR an admin/manager.
+    const { data: roles } = await userClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    const isPriv = (roles ?? []).some(
+      (r: { role: string }) => r.role === "admin" || r.role === "manager",
+    );
+    if (!isPriv) {
+      const { data: attempt, error: attemptErr } = await userClient
+        .from("call_attempts")
+        .select("agent_id")
+        .eq("id", callAttemptId)
+        .maybeSingle();
+      if (attemptErr || !attempt || attempt.agent_id !== userId) {
+        return json({ error: "Forbidden" }, 403);
+      }
     }
 
     const apiKey = Deno.env.get("LOVABLE_API_KEY");
