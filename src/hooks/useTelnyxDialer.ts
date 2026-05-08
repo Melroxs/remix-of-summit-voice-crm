@@ -63,7 +63,7 @@ export function useTelnyxDialer() {
       const client = clientRef.current;
       if (!client || !isRegistered || activeCallRef.current) return;
 
-      const call = client.newCall({
+      const call: any = client.newCall({
         destinationNumber: phoneNumber,
         callerNumber,
       });
