@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,8 @@ type DialModeType = "click_to_call" | "power_dial" | "auto_dial";
 export default function Dialer() {
   const { user, profile, refreshProfile } = useAuth();
   const { updateStatus } = useAgentStatus();
+  const navigate = useNavigate();
+  const prevAwaitingDispositionRef = useRef(false);
 
   const [campaignId, setCampaignId] = useState<string | null>(null);
   const [campaigns, setCampaigns] = useState<{ id: string; name: string; status: string; dial_mode: string | null }[]>([]);
@@ -137,6 +140,21 @@ export default function Dialer() {
     hangUp,
     submitDisposition,
   } = useTelnyxDialer();
+
+  // When the disposition is submitted (awaitingDisposition goes true -> false),
+  // navigate to the lead's detail page if available, otherwise call history.
+  useEffect(() => {
+    const prev = prevAwaitingDispositionRef.current;
+    if (prev && !awaitingDisposition) {
+      const contactId =
+        currentLead?.contact_id ||
+        manualMatchedContact?.contact_id ||
+        dailyCurrentLead?.contact_id ||
+        null;
+      navigate(contactId ? `/contacts?id=${contactId}` : "/recordings");
+    }
+    prevAwaitingDispositionRef.current = awaitingDisposition;
+  }, [awaitingDisposition, navigate, currentLead, manualMatchedContact, dailyCurrentLead]);
 
   // Convenience aliases — UI references these names in several places.
   const isConnected = isRegistered;
