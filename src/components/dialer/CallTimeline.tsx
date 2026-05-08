@@ -119,13 +119,13 @@ export default function CallTimeline({ entries, telnyxCallId }: Props) {
         <CardTitle className="text-sm">Call Timeline</CardTitle>
       </CardHeader>
       <CardContent>
-        {entries.length === 0 ? (
+        {!hasAny ? (
           <p className="text-xs text-muted-foreground">No call in progress.</p>
         ) : (
           <ol className="relative space-y-3 ps-4 border-s border-border">
             {ORDER.map((stage) => {
               const meta = STAGE_META[stage];
-              const entry = byStage.get(stage);
+              const entry = merged.get(stage);
               const reached = !!entry;
               const Icon = meta.icon;
               return (
