@@ -1,0 +1,1 @@
+ALTER VIEW public.campaign_lead_availability SET (security_invoker = true);
