@@ -87,6 +87,7 @@ export default function Dialer() {
     remainingToday: dailyRemainingToday,
     currentLead: dailyCurrentLead,
     advanceToNext: advanceDailyQueue,
+    isLoading: dailyQueueLoading,
   } = useAgentDailyQueue();
 
   // Flatten the daily-queue lead into the shape expected by <LeadCard />.
@@ -330,10 +331,11 @@ export default function Dialer() {
       triggerAiSummary(callLogId);
 
       await advanceToNext();
+      await advanceDailyQueue();
     } finally {
       disposingRef.current = false;
     }
-  }, [currentLead, notes, disposeLead, hangup, advanceToNext, triggerAiSummary]);
+  }, [currentLead, notes, disposeLead, hangup, advanceToNext, advanceDailyQueue, triggerAiSummary]);
 
   const handleModalSaved = useCallback(async () => {
     if (!currentLead || !pendingDisposition) return;
@@ -346,10 +348,11 @@ export default function Dialer() {
       toast({ title: "Disposition saved" });
       triggerAiSummary(callLogId);
       await advanceToNext();
+      await advanceDailyQueue();
     } finally {
       disposingRef.current = false;
     }
-  }, [currentLead, pendingDisposition, notes, disposeLead, advanceToNext, triggerAiSummary]);
+  }, [currentLead, pendingDisposition, notes, disposeLead, advanceToNext, advanceDailyQueue, triggerAiSummary]);
 
   const handleModalClose = useCallback(() => {
     setShowCallbackModal(false);
@@ -586,7 +589,19 @@ export default function Dialer() {
               </Card>
             )
           ) : (
-            <LeadCard lead={dailyLeadCard ?? currentLead} />
+            dailyLeadCard ? (
+              <LeadCard lead={dailyLeadCard} />
+            ) : dailyQueueLoading ? (
+              <LeadCard lead={null} />
+            ) : (
+              <Card>
+                <CardContent className="py-10 text-center">
+                  <p className="text-sm text-foreground">
+                    Queue complete — no more leads assigned for today
+                  </p>
+                </CardContent>
+              </Card>
+            )
           )}
 
           <Card>
