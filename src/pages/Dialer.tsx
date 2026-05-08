@@ -144,7 +144,7 @@ export default function Dialer() {
 
   // Features not yet exposed by useTelnyxDialer — keep harmless defaults so
   // the existing UI keeps rendering without layout/markup changes.
-  const connectionState = connectionStatus;
+  const connectionState = connectionStatus as string;
   const clientReady = isRegistered;
   const callState = isCallActive ? "active" : "idle";
   const muted = false;
@@ -590,7 +590,8 @@ export default function Dialer() {
                         currentLead?.phone_e164 ||
                         currentLead?.phone_raw ||
                         "";
-                      dial(selectedLeadPhoneNumber);
+                      const campaignCallerNumber = lastOutboundNumber || "";
+                      dial(selectedLeadPhoneNumber, campaignCallerNumber);
                     }} disabled={!isConnected || !dailyCurrentLead}>
                       <Phone className="w-6 h-6" />
                     </Button>
