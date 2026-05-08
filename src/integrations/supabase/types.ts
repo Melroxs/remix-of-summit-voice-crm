@@ -1115,6 +1115,44 @@ export type Database = {
           },
         ]
       }
+      campaign_phone_numbers: {
+        Row: {
+          area_code: string
+          campaign_id: string
+          created_at: string
+          health_score: number
+          id: string
+          is_active: boolean
+          phone_number: string
+        }
+        Insert: {
+          area_code: string
+          campaign_id: string
+          created_at?: string
+          health_score?: number
+          id?: string
+          is_active?: boolean
+          phone_number: string
+        }
+        Update: {
+          area_code?: string
+          campaign_id?: string
+          created_at?: string
+          health_score?: number
+          id?: string
+          is_active?: boolean
+          phone_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_phone_numbers_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_scripts: {
         Row: {
           body: string
