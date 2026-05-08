@@ -651,6 +651,7 @@ export type Database = {
           call_attempt_id: string | null
           call_session_id: string | null
           campaign_id: string | null
+          connection_id: string | null
           created_at: string
           download_url: string | null
           duration_seconds: number | null
@@ -669,6 +670,7 @@ export type Database = {
           call_attempt_id?: string | null
           call_session_id?: string | null
           campaign_id?: string | null
+          connection_id?: string | null
           created_at?: string
           download_url?: string | null
           duration_seconds?: number | null
@@ -687,6 +689,7 @@ export type Database = {
           call_attempt_id?: string | null
           call_session_id?: string | null
           campaign_id?: string | null
+          connection_id?: string | null
           created_at?: string
           download_url?: string | null
           duration_seconds?: number | null
