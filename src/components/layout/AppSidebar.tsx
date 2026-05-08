@@ -28,6 +28,7 @@ import {
   GripVertical,
   Pencil,
   Check as CheckIcon,
+  Radio,
 } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +64,7 @@ const allNavItems: NavItem[] = [
   { to: "/users", icon: UserCog, label: "Users", roles: ["admin"] },
   { to: "/lead-assignment", icon: UserPlus, label: "Lead Assignment", roles: ["admin"] },
   { to: "/settings", icon: Settings, label: "Settings", roles: ["admin"] },
+  { to: "/telnyx-test", icon: Radio, label: "Telnyx Test", roles: ["admin"] },
   { to: "/team-dashboard", icon: Headphones, label: "Team Monitor", roles: ["admin", "team_leader"] },
   { to: "/qa-dashboard", icon: Star, label: "QA Scoring", roles: ["admin", "team_leader"] },
   { to: "/agent-performance", icon: BarChart2, label: "Agent Perf", roles: ["admin", "team_leader"] },

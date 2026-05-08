@@ -35,6 +35,7 @@ const FollowUpTasks = lazy(() => import("@/pages/FollowUpTasks"));
 const TechnicianCalendar = lazy(() => import("@/pages/TechnicianCalendar"));
 const TechnicianDashboard = lazy(() => import("@/pages/TechnicianDashboard"));
 const LeadAssignment = lazy(() => import("@/pages/LeadAssignment"));
+const TelnyxTokenTest = lazy(() => import("@/pages/TelnyxTokenTest"));
 
 const queryClient = new QueryClient();
 
@@ -146,6 +147,9 @@ const App = () => (
                 } />
                 <Route path="/lead-assignment" element={
                   <RoleGuard allowedRoles={["admin"]}><LeadAssignment /></RoleGuard>
+                } />
+                <Route path="/telnyx-test" element={
+                  <RoleGuard allowedRoles={["admin"]}><TelnyxTokenTest /></RoleGuard>
                 } />
 
                 <Route path="/team-dashboard" element={
