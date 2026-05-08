@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 /**
@@ -17,13 +17,20 @@ export default function UnassignedProfilesBanner() {
   const [count, setCount] = useState<number | null>(null);
   const [targetId, setTargetId] = useState<string>("");
   const [working, setWorking] = useState(false);
+  const [justReassigned, setJustReassigned] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!isAdmin) return;
-    const { count: c } = await supabase
+    const { count: c, error } = await supabase
       .from("profiles")
       .select("user_id", { head: true, count: "exact" })
       .is("company_id", null);
+    if (error) {
+      setLastError(error.message);
+      return;
+    }
+    setLastError(null);
     setCount(c ?? 0);
   }, [isAdmin]);
 
@@ -37,7 +44,31 @@ export default function UnassignedProfilesBanner() {
     }
   }, [activeCompanyId, companies, targetId]);
 
-  if (!isAdmin || count === null || count === 0) return null;
+  if (!isAdmin || count === null) return null;
+
+  if (lastError) {
+    return (
+      <Alert className="border-destructive/40 bg-destructive/5">
+        <AlertTriangle className="w-4 h-4 text-destructive" />
+        <AlertDescription className="text-sm">
+          Could not verify unassigned profiles: {lastError}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (count === 0) {
+    if (!justReassigned) return null;
+    return (
+      <Alert className="border-emerald-500/40 bg-emerald-500/5">
+        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+        <AlertDescription className="flex items-center justify-between gap-2 text-sm">
+          <span>All profiles have a company assigned. <strong>0</strong> unassigned remaining.</span>
+          <Button size="sm" variant="ghost" onClick={() => setJustReassigned(false)}>Dismiss</Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
 
   const target = companies.find((c) => c.id === targetId);
 
@@ -55,12 +86,14 @@ export default function UnassignedProfilesBanner() {
     setWorking(false);
     if (error) {
       toast({ title: "Reassign failed", description: error.message, variant: "destructive" });
+      setLastError(error.message);
       return;
     }
     toast({
       title: "Profiles reassigned",
       description: `${previousCount} user${previousCount === 1 ? "" : "s"} moved to ${target?.name ?? "company"}.`,
     });
+    setJustReassigned(true);
     await refresh();
   };
 
