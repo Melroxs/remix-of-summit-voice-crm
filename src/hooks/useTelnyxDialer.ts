@@ -4,6 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
 
+export type CallTimelineStage =
+  | "initiated"
+  | "ringing"
+  | "active"
+  | "hangup"
+  | "disposition";
+
+export interface CallTimelineEntry {
+  stage: CallTimelineStage;
+  at: string; // ISO timestamp
+  detail?: string;
+}
+
 export function useTelnyxDialer() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [isCallActive, setIsCallActive] = useState(false);
@@ -12,6 +25,7 @@ export function useTelnyxDialer() {
   const [connectionStatus, setConnectionStatus] =
     useState<ConnectionStatus>("disconnected");
   const [awaitingDisposition, setAwaitingDisposition] = useState(false);
+  const [callTimeline, setCallTimeline] = useState<CallTimelineEntry[]>([]);
 
   const clientRef = useRef<TelnyxRTC | null>(null);
   const activeCallRef = useRef<any>(null);
@@ -26,6 +40,17 @@ export function useTelnyxDialer() {
       durationTimerRef.current = null;
     }
   }, []);
+
+  const pushTimeline = useCallback(
+    (stage: CallTimelineStage, detail?: string) => {
+      setCallTimeline((prev) => {
+        // De-duplicate consecutive same-stage entries.
+        if (prev.length && prev[prev.length - 1].stage === stage) return prev;
+        return [...prev, { stage, at: new Date().toISOString(), detail }];
+      });
+    },
+    []
+  );
 
   const connect = useCallback(async () => {
     if (clientRef.current) return;
@@ -66,7 +91,12 @@ export function useTelnyxDialer() {
         if (activeCallRef.current && call.id !== activeCallRef.current.id) return;
 
         const state: string = call.state;
-        if (state === "active") {
+        if (state === "new" || state === "trying" || state === "requesting") {
+          pushTimeline("initiated");
+        } else if (state === "ringing" || state === "early") {
+          pushTimeline("ringing");
+        } else if (state === "active") {
+          pushTimeline("active");
           setIsCallActive(true);
           isCallActiveRef.current = true;
           setCallDuration(0);
@@ -82,6 +112,7 @@ export function useTelnyxDialer() {
           state === "destroy" ||
           state === "purge"
         ) {
+          pushTimeline("hangup", call.cause || undefined);
           const wasActive = isCallActiveRef.current;
           setIsCallActive(false);
           isCallActiveRef.current = false;
@@ -100,12 +131,15 @@ export function useTelnyxDialer() {
       console.error("[useTelnyxDialer] connect() failed", err);
       setConnectionStatus("disconnected");
     }
-  }, []);
+  }, [pushTimeline, stopDurationTimer]);
 
   const dial = useCallback(
     (phoneNumber: string, callerNumber: string) => {
       const client = clientRef.current;
       if (!client || !isRegistered || activeCallRef.current) return;
+
+      // Fresh timeline for each new call.
+      setCallTimeline([{ stage: "initiated", at: new Date().toISOString() }]);
 
       const call: any = client.newCall({
         destinationNumber: phoneNumber,
@@ -115,7 +149,7 @@ export function useTelnyxDialer() {
       activeCallRef.current = call;
       setActiveCall(call);
     },
-    [isRegistered, stopDurationTimer]
+    [isRegistered]
   );
 
   const hangUp = useCallback(() => {
@@ -149,12 +183,13 @@ export function useTelnyxDialer() {
       } catch (err) {
         console.error("[useTelnyxDialer] submitDisposition failed", err);
       } finally {
+        pushTimeline("disposition", dispositionValue);
         lastCallIdRef.current = null;
         lastCallStartedAtRef.current = null;
         setAwaitingDisposition(false);
       }
     },
-    []
+    [pushTimeline]
   );
 
   useEffect(() => {
@@ -170,6 +205,8 @@ export function useTelnyxDialer() {
     activeCall,
     connectionStatus,
     awaitingDisposition,
+    callTimeline,
+    telnyxCallId: lastCallIdRef.current,
     connect,
     dial,
     hangUp,
