@@ -53,6 +53,44 @@ export function useTelnyxDialer() {
         setConnectionStatus("disconnected");
       });
 
+      // Telnyx WebRTC surfaces per-call state via the global notification
+      // stream rather than `call.on(...)`. Listen here so we can track the
+      // active call lifecycle and clear refs on terminal states.
+      client.on("telnyx.notification", (notification: any) => {
+        if (!notification || notification.type !== "callUpdate") return;
+        const call = notification.call;
+        if (!call) return;
+
+        // Ignore notifications for calls we didn't initiate (or already cleared).
+        if (activeCallRef.current && call.id !== activeCallRef.current.id) return;
+
+        const state: string = call.state;
+        if (state === "active") {
+          setIsCallActive(true);
+          setCallDuration(0);
+          stopDurationTimer();
+          lastCallStartedAtRef.current = new Date().toISOString();
+          lastCallIdRef.current =
+            call.id ?? call.options?.telnyxCallControlId ?? null;
+          durationTimerRef.current = setInterval(() => {
+            setCallDuration((d) => d + 1);
+          }, 1000);
+        } else if (
+          state === "hangup" ||
+          state === "destroy" ||
+          state === "purge"
+        ) {
+          const wasActive = isCallActiveRef.current;
+          setIsCallActive(false);
+          activeCallRef.current = null;
+          setActiveCall(null);
+          stopDurationTimer();
+          setCallDuration(0);
+          // Only prompt for disposition if the call was actually connected.
+          if (wasActive) setAwaitingDisposition(true);
+        }
+      });
+
       clientRef.current = client;
       client.connect();
     } catch (err) {
@@ -68,34 +106,11 @@ export function useTelnyxDialer() {
 
       const call: any = client.newCall({
         destinationNumber: phoneNumber,
-        callerNumber,
+        callerNumber: callerNumber || undefined,
       });
 
       activeCallRef.current = call;
       setActiveCall(call);
-
-      call.on("call.answered", () => {
-        setIsCallActive(true);
-        setCallDuration(0);
-        stopDurationTimer();
-        lastCallStartedAtRef.current = new Date().toISOString();
-        lastCallIdRef.current =
-          (call as any)?.id ??
-          (call as any)?.options?.telnyxCallControlId ??
-          null;
-        durationTimerRef.current = setInterval(() => {
-          setCallDuration((d) => d + 1);
-        }, 1000);
-      });
-
-      call.on("call.hangup", () => {
-        setIsCallActive(false);
-        activeCallRef.current = null;
-        setActiveCall(null);
-        stopDurationTimer();
-        setCallDuration(0);
-        setAwaitingDisposition(true);
-      });
     },
     [isRegistered, stopDurationTimer]
   );
