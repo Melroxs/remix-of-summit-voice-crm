@@ -16,6 +16,7 @@ import NumberHealthDashboard from "@/components/settings/NumberHealthDashboard";
 import LeadScoringPanel from "@/components/settings/LeadScoringPanel";
 import CallerIdPoolDashboard from "@/components/settings/CallerIdPoolDashboard";
 import CampaignNumberPoolHealth from "@/components/settings/CampaignNumberPoolHealth";
+import WebhookTestPanel from "@/components/settings/WebhookTestPanel";
 
 interface ClientAccount { id: string; name: string; created_at: string; }
 interface DispositionRow { id: string; code: string; label: string; active: boolean; sort_order: number; requires_callback_datetime: boolean; requires_appointment_modal: boolean; }
@@ -194,6 +195,7 @@ export default function CrmSettings() {
 
         {/* TELEPHONY TAB */}
         <TabsContent value="telephony" className="space-y-6">
+          <WebhookTestPanel />
           {/* Telephony Providers */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
