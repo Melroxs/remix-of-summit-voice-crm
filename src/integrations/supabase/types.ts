@@ -1515,6 +1515,7 @@ export type Database = {
           county: string | null
           created_at: string
           credit_rating: string | null
+          custom_fields: Json
           email: string | null
           email_secondary: string | null
           first_name: string
@@ -1551,6 +1552,7 @@ export type Database = {
           county?: string | null
           created_at?: string
           credit_rating?: string | null
+          custom_fields?: Json
           email?: string | null
           email_secondary?: string | null
           first_name: string
@@ -1587,6 +1589,7 @@ export type Database = {
           county?: string | null
           created_at?: string
           credit_rating?: string | null
+          custom_fields?: Json
           email?: string | null
           email_secondary?: string | null
           first_name?: string
