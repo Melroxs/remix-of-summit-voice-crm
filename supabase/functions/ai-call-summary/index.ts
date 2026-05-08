@@ -1,31 +1,20 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const TOOL_SCHEMA = {
-  type: "function" as const,
-  function: {
-    name: "save_call_summary",
-    description: "Save a structured AI call summary for a CRM call log.",
-    parameters: {
-      type: "object",
-      properties: {
-        summary: { type: "string", description: "2-3 sentence concise summary of the call" },
-        call_outcome_summary: { type: "string", description: "One-line outcome, e.g. 'Homeowner interested, callback requested'" },
-        next_action: { type: "string", description: "Specific actionable next step for the agent" },
-        sentiment: { type: "string", enum: ["positive", "neutral", "negative", "unknown"], description: "Overall call sentiment" },
-        lead_quality_score: { type: "integer", minimum: 1, maximum: 10, description: "Lead quality 1-10. 10=hot homeowner ready to buy, 1=dead lead/wrong number." },
-        recommended_action: { type: "string", description: "Concrete recommended next action (e.g. 'Book on-site inspection within 48h', 'Add to nurture drip', 'Mark DNC')." },
-      },
-      required: ["summary", "call_outcome_summary", "next_action", "sentiment", "lead_quality_score", "recommended_action"],
-      additionalProperties: false,
-    },
-  },
-};
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+const SYSTEM_PROMPT =
+  "You are a call analysis assistant for a sales team. Analyse the following sales call transcript and return a JSON object with three fields: summary (a 2-3 sentence plain English summary of what happened on the call), sentiment (one of: positive, neutral, negative), and objections (an array of strings listing any objections the lead raised). Return only valid JSON, no other text.";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -33,271 +22,96 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Missing authorization" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const body = await req.json().catch(() => null);
+    const callAttemptId: string | undefined = body?.callAttemptId;
+    const transcript: string | undefined = body?.transcript;
+
+    if (!callAttemptId || typeof transcript !== "string" || !transcript.trim()) {
+      return json({ error: "callAttemptId and transcript are required" }, 400);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    if (!apiKey) return json({ error: "LOVABLE_API_KEY is not configured" }, 500);
 
-    if (!lovableApiKey) {
-      return new Response(JSON.stringify({ error: "AI not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Verify caller
-    const callerClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+    // Use tool calling for reliable structured output.
+    const aiRes = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-3-flash-preview",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: transcript },
+        ],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "save_call_analysis",
+              description: "Save the structured analysis of the call.",
+              parameters: {
+                type: "object",
+                properties: {
+                  summary: { type: "string" },
+                  sentiment: { type: "string", enum: ["positive", "neutral", "negative"] },
+                  objections: { type: "array", items: { type: "string" } },
+                },
+                required: ["summary", "sentiment", "objections"],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: "function", function: { name: "save_call_analysis" } },
+      }),
     });
-    const { data: { user: caller } } = await callerClient.auth.getUser();
-    if (!caller) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+    if (!aiRes.ok) {
+      if (aiRes.status === 429) return json({ error: "Rate limits exceeded, please try again later." }, 429);
+      if (aiRes.status === 402) return json({ error: "Payment required, please add funds to your Lovable AI workspace." }, 402);
+      const text = await aiRes.text();
+      console.error("[ai-call-summary] AI gateway error:", aiRes.status, text);
+      return json({ error: "AI gateway error" }, 500);
     }
 
-    const { call_attempt_id, regenerate } = await req.json();
-    if (!call_attempt_id) {
-      return new Response(JSON.stringify({ error: "call_attempt_id is required" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const adminClient = createClient(supabaseUrl, serviceKey);
-
-    // Authorization: caller must be the call's agent OR have an admin/manager/team_leader role.
-    const { data: callAccess } = await adminClient
-      .from("call_attempts")
-      .select("agent_id, campaign_id")
-      .eq("id", call_attempt_id)
-      .maybeSingle();
-
-    if (!callAccess) {
-      return new Response(JSON.stringify({ error: "Call log not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const isOwner = callAccess.agent_id === caller.id;
-    let hasPrivilegedRole = false;
-    if (!isOwner) {
-      const { data: roles } = await adminClient
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", caller.id);
-      const privileged = new Set(["admin", "manager", "team_leader"]);
-      hasPrivilegedRole = (roles ?? []).some((r: { role: string }) => privileged.has(r.role));
-    }
-    if (!isOwner && !hasPrivilegedRole) {
-      return new Response(JSON.stringify({ error: "Forbidden" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // If regenerating, delete existing summary
-    if (regenerate) {
-      await adminClient.from("ai_summaries").delete().eq("call_attempt_id", call_attempt_id);
-    }
-
-    // Check if summary already exists
-    const { data: existing } = await adminClient
-      .from("ai_summaries")
-      .select("id")
-      .eq("call_attempt_id", call_attempt_id)
-      .maybeSingle();
-
-    if (existing && !regenerate) {
-      return new Response(JSON.stringify({ error: "Summary already exists", existing: true }), {
-        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Fetch call log with related data
-    const { data: callLog } = await adminClient
-      .from("call_attempts")
-      .select("*, contacts(first_name, last_name, owner_renter, credit_rating, home_value, household_income, cool_notes, city, state), campaigns(name)")
-      .eq("id", call_attempt_id)
-      .maybeSingle();
-
-    if (!callLog) {
-      return new Response(JSON.stringify({ error: "Call log not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Insert pending record
-    const pendingRow = {
-      call_attempt_id,
-      contact_id: callLog.contact_id || null,
-      agent_id: callLog.agent_id || null,
-      campaign_id: callLog.campaign_id || null,
-      summary: "",
-      next_action: null,
-      sentiment: null,
-      call_outcome_summary: null,
-      suggested_next_action: null,
-      summary_source: "fallback",
-      generation_status: "processing",
-      error_message: null,
-    };
-    const { data: pendingInsert, error: pendingErr } = await adminClient
-      .from("ai_summaries")
-      .insert(pendingRow)
-      .select("id")
-      .single();
-
-    if (pendingErr) {
-      console.error("Pending insert error:", pendingErr);
-      return new Response(JSON.stringify({ error: pendingErr.message }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const summaryId = pendingInsert.id;
-
-    // Build context
-    const contact = (callLog as any).contacts;
-    const campaign = (callLog as any).campaigns;
-    const durationMin = callLog.duration_seconds ? Math.floor(callLog.duration_seconds / 60) : 0;
-    const durationSec = callLog.duration_seconds ? callLog.duration_seconds % 60 : 0;
-
-    const contextParts = [
-      `Disposition: ${callLog.disposition || "none"}`,
-      `Call duration: ${durationMin}m ${durationSec}s`,
-      `Call source: ${callLog.call_source || "queue"}`,
-      `Dial mode: ${callLog.dial_mode_used || "unknown"}`,
-      contact ? `Contact: ${contact.first_name} ${contact.last_name}` : null,
-      contact?.city && contact?.state ? `Location: ${contact.city}, ${contact.state}` : null,
-      contact?.owner_renter ? `Owner/Renter: ${contact.owner_renter}` : null,
-      contact?.credit_rating ? `Credit rating: ${contact.credit_rating}` : null,
-      contact?.home_value ? `Home value: ${contact.home_value}` : null,
-      contact?.household_income ? `Household income: ${contact.household_income}` : null,
-      campaign ? `Campaign: ${campaign.name}` : null,
-      callLog.notes ? `Agent notes: ${callLog.notes}` : null,
-      contact?.cool_notes ? `Contact notes: ${contact.cool_notes}` : null,
-    ].filter(Boolean).join("\n");
-
-    const systemPrompt = `You are a CRM call intelligence assistant for an outbound sales/lead generation call center.
-You work for a roofing company doing outbound calls to homeowners about roof repair / replacement.
-Based on the call metadata provided, generate a structured summary.
-Even if there is no transcript, use the disposition, notes, duration, and contact context to produce useful CRM intelligence.
-If the call was very short (under 10 seconds) with no_answer/voicemail, keep the summary brief.
-For longer calls with notes, provide detailed actionable intelligence.
-
-Lead quality score guide (1-10):
-- 9-10: Confirmed homeowner, urgent roofing need, appointment booked or hot intent
-- 7-8: Homeowner with real interest, callback or warm follow-up
-- 5-6: Reachable, lukewarm interest, needs nurture
-- 3-4: Reached but not interested or wrong timing
-- 1-2: Wrong number, DNC, dead lead, no contact made`;
-
+    const aiData = await aiRes.json();
+    const toolCall = aiData?.choices?.[0]?.message?.tool_calls?.[0];
+    const argsStr = toolCall?.function?.arguments;
+    let parsed: { summary: string; sentiment: string; objections: string[] };
     try {
-      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: contextParts },
-          ],
-          tools: [TOOL_SCHEMA],
-          tool_choice: { type: "function", function: { name: "save_call_summary" } },
-        }),
-      });
-
-      if (!aiResponse.ok) {
-        const status = aiResponse.status;
-        const errText = await aiResponse.text();
-        console.error("AI gateway error:", status, errText);
-
-        const errorMsg = status === 429 ? "Rate limit exceeded" : status === 402 ? "Credits exhausted" : `AI error (${status})`;
-        await adminClient.from("ai_summaries").update({
-          generation_status: "failed",
-          error_message: errorMsg,
-        }).eq("id", summaryId);
-
-        return new Response(JSON.stringify({ error: errorMsg }), {
-          status, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const aiData = await aiResponse.json();
-      const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
-      let parsed: any;
-
-      if (toolCall?.function?.arguments) {
-        try {
-          parsed = JSON.parse(toolCall.function.arguments);
-        } catch {
-          parsed = null;
-        }
-      }
-
-      // Fallback: try parsing message content as JSON
-      if (!parsed) {
-        const content = aiData.choices?.[0]?.message?.content || "";
-        try {
-          const cleaned = content.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-          parsed = JSON.parse(cleaned);
-        } catch {
-          parsed = {
-            summary: content.slice(0, 500) || "Summary could not be generated.",
-            call_outcome_summary: callLog.disposition || "Unknown outcome",
-            next_action: "Review call details manually",
-            sentiment: "unknown",
-          };
-        }
-      }
-
-      // Update the summary record
-      await adminClient.from("ai_summaries").update({
-        summary: parsed.summary || "No summary generated",
-        next_action: parsed.next_action || null,
-        sentiment: parsed.sentiment || null,
-        call_outcome_summary: parsed.call_outcome_summary || null,
-        suggested_next_action: parsed.next_action || null,
-        lead_quality_score: typeof parsed.lead_quality_score === "number" ? Math.max(1, Math.min(10, Math.round(parsed.lead_quality_score))) : null,
-        recommended_action: parsed.recommended_action || parsed.next_action || null,
-        quality_score: typeof parsed.lead_quality_score === "number" ? Math.max(1, Math.min(10, Math.round(parsed.lead_quality_score))) * 10 : null,
-        summary_source: "fallback",
-        generation_status: "complete",
-        error_message: null,
-      }).eq("id", summaryId);
-
-      // Fetch the completed record
-      const { data: final } = await adminClient
-        .from("ai_summaries")
-        .select("*")
-        .eq("id", summaryId)
-        .single();
-
-      return new Response(JSON.stringify({ ok: true, summary: final }), {
-        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    } catch (aiErr: any) {
-      console.error("AI call error:", aiErr);
-      await adminClient.from("ai_summaries").update({
-        generation_status: "failed",
-        error_message: aiErr.message || "Unknown AI error",
-      }).eq("id", summaryId);
-
-      return new Response(JSON.stringify({ error: "AI processing failed" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      parsed = JSON.parse(argsStr ?? "{}");
+    } catch {
+      // Fallback: try to parse from raw content
+      const raw = aiData?.choices?.[0]?.message?.content ?? "{}";
+      parsed = JSON.parse(raw);
     }
-  } catch (err: any) {
-    console.error("[ai-call-summary] Error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    const { error: insertErr } = await supabase.from("ai_summaries").insert({
+      call_attempt_id: callAttemptId,
+      summary: parsed.summary ?? "",
+      sentiment: parsed.sentiment ?? null,
+      objections: parsed.objections ?? [],
+      created_at: new Date().toISOString(),
+      summary_source: "lovable_ai",
+      generation_status: "complete",
     });
+
+    if (insertErr) {
+      console.error("[ai-call-summary] insert error:", insertErr.message);
+      return json({ error: insertErr.message }, 500);
+    }
+
+    return json({ ok: true, summary: parsed.summary, sentiment: parsed.sentiment, objections: parsed.objections });
+  } catch (err) {
+    console.error("[ai-call-summary] handler error:", err);
+    return json({ error: (err as Error)?.message || "Internal error" }, 500);
   }
 });

@@ -94,6 +94,7 @@ export type Database = {
           lead_quality_score: number | null
           next_action: string | null
           next_step_recommendation: string | null
+          objections: Json
           quality_score: number | null
           recommended_action: string | null
           sentiment: string | null
@@ -114,6 +115,7 @@ export type Database = {
           lead_quality_score?: number | null
           next_action?: string | null
           next_step_recommendation?: string | null
+          objections?: Json
           quality_score?: number | null
           recommended_action?: string | null
           sentiment?: string | null
@@ -134,6 +136,7 @@ export type Database = {
           lead_quality_score?: number | null
           next_action?: string | null
           next_step_recommendation?: string | null
+          objections?: Json
           quality_score?: number | null
           recommended_action?: string | null
           sentiment?: string | null

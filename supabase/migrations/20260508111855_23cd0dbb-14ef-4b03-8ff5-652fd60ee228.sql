@@ -1,0 +1,1 @@
+ALTER TABLE public.ai_summaries ADD COLUMN IF NOT EXISTS objections jsonb NOT NULL DEFAULT '[]'::jsonb;
