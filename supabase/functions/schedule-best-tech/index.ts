@@ -195,6 +195,19 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Role check: only internal staff may invoke the scheduler
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userData.user.id);
+    const allowed = new Set(["admin", "manager", "team_leader", "agent"]);
+    if (!(roles ?? []).some((r: { role: string }) => allowed.has(r.role))) {
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json().catch(() => ({}));
     const lead = body.lead as Lead | undefined;
     const duration = Number(body.duration);
@@ -202,6 +215,15 @@ Deno.serve(async (req) => {
 
     if (!lead?.address || !duration || duration <= 0) {
       return new Response(JSON.stringify({ error: "lead.address and duration required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Validate address length and characters before forwarding to external APIs
+    if (typeof lead.address !== "string" || lead.address.length > 300 ||
+        !/^[\w\s,.'#\-/()]+$/.test(lead.address)) {
+      return new Response(JSON.stringify({ error: "Invalid address" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

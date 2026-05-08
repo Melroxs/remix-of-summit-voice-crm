@@ -36,6 +36,16 @@ Deno.serve(async (req) => {
     }
     const agentId = claims.claims.sub as string;
 
+    // --- Role check ---
+    const { data: roles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", agentId);
+    const allowed = new Set(["admin", "manager", "team_leader", "agent"]);
+    if (!(roles ?? []).some((r: { role: string }) => allowed.has(r.role))) {
+      return json({ error: "Forbidden" }, 403);
+    }
+
     // --- Body ---
     const body = await req.json().catch(() => null);
     const destinationNumber = body?.destinationNumber;
