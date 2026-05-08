@@ -15,6 +15,7 @@ import {
 import { CalendarPlus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useDialerQueue } from "@/hooks/use-dialer-queue";
+import { useDialerQueue as useAgentDailyQueue } from "@/hooks/useDialerQueue";
 import { useTelnyx } from "@/hooks/use-telnyx";
 import { useTelnyxDialer } from "@/hooks/useTelnyxDialer";
 import { useAgentStatus, isCallableStatus, getStatusMeta } from "@/hooks/use-agent-status";
@@ -79,6 +80,12 @@ export default function Dialer() {
 
   const { currentLead, stats, loading, fetchNextLead, disposeLead, skipLead, fetchStats } =
     useDialerQueue(campaignId);
+
+  const {
+    totalAssigned: dailyTotalAssigned,
+    contactedToday: dailyContactedToday,
+    remainingToday: dailyRemainingToday,
+  } = useAgentDailyQueue();
 
   const { phones, getNextOutboundNumber, markUsed } = useCampaignPhones(campaignId);
 
