@@ -605,6 +605,8 @@ export default function Dialer() {
             )
           )}
 
+          <CallHistoryPanel contactId={activeContactId} />
+
           <Card>
             <CardContent className="py-6">
               <div className="flex items-center justify-center gap-4">
