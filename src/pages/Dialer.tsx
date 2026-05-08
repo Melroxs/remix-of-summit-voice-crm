@@ -17,6 +17,7 @@ import { toast } from "@/hooks/use-toast";
 import { useDialerQueue } from "@/hooks/use-dialer-queue";
 import { useDialerQueue as useAgentDailyQueue } from "@/hooks/useDialerQueue";
 import { useAgentStatus, isCallableStatus, getStatusMeta } from "@/hooks/use-agent-status";
+import { useTelnyxDialer } from "@/hooks/useTelnyxDialer";
 import { useCampaignPhones } from "@/hooks/use-campaign-phones";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { formatPhoneDisplay } from "@/lib/phone";
@@ -123,35 +124,44 @@ export default function Dialer() {
   const { phones, getNextOutboundNumber, markUsed } = useCampaignPhones(campaignId);
 
   // ---------------------------------------------------------------------------
-  // Telnyx / WebRTC wiring removed — replaced with placeholder state & no-op
-  // handlers so the UI continues to render. Re-attach real telephony later.
+  // Telnyx WebRTC wiring (via useTelnyxDialer hook).
   // ---------------------------------------------------------------------------
-  const isRegistered = false;
-  const isCallActive = false;
-  const callDuration = 0;
-  const connectionStatus = "disconnected" as string;
-  const connectionState = "disconnected" as string;
-  const clientReady = false;
-  const callState = "idle" as string;
+  const {
+    isRegistered,
+    isCallActive,
+    callDuration,
+    connectionStatus,
+    connect,
+    dial,
+    hangUp,
+  } = useTelnyxDialer();
+
+  // Convenience aliases — UI references these names in several places.
+  const isConnected = isRegistered;
+  const hangup = hangUp;
+  const handleHangUp = hangUp;
+  const makeCall: (..._args: any[]) => void = (n: string) => dial(n, "");
+
+  // Features not yet exposed by useTelnyxDialer — keep harmless defaults so
+  // the existing UI keeps rendering without layout/markup changes.
+  const connectionState = connectionStatus as string;
+  const clientReady = isRegistered;
+  const callState = isCallActive ? "active" : "idle";
   const muted = false;
   const held = false;
   const errorMessage: string | null = null;
-
-  const handleDial = () => {};
-  const handleHangUp = () => {};
-
-  // Aliases preserved so existing call sites keep type-checking as no-ops.
-  const connect = () => {};
-  const dial: (..._args: any[]) => void = () => {};
-  const hangUp = handleHangUp;
-  const hangup = handleHangUp;
-  const makeCall: (..._args: any[]) => void = () => {};
   const toggleMute = () => {};
   const toggleHold = () => {};
   const sendDTMF: (..._args: any[]) => void = () => {};
 
-  const onCall = false;
-  const canMakeCalls = false;
+  const onCall = isCallActive;
+  const canMakeCalls = isRegistered && agentReady && !onCall;
+
+  // Auto-connect on mount.
+  useEffect(() => {
+    connect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load campaigns once
   useEffect(() => {
@@ -574,21 +584,21 @@ export default function Dialer() {
                 ) : !isCallActive ? (
                   <>
                     <Button size="lg" className="rounded-full w-16 h-16 bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
-                      const currentLeadPhoneNumber =
+                      const selectedLeadPhoneNumber =
                         dailyCurrentLead?.contact?.phone_e164 ||
                         dailyCurrentLead?.contact?.phone_raw ||
                         currentLead?.phone_e164 ||
                         currentLead?.phone_raw ||
                         "";
                       const campaignCallerNumber = lastOutboundNumber || "";
-                      dial(currentLeadPhoneNumber, campaignCallerNumber);
-                    }} disabled={!isRegistered || !dailyCurrentLead} onClickCapture={handleDial}>
+                      dial(selectedLeadPhoneNumber, campaignCallerNumber);
+                    }} disabled={!isConnected || !dailyCurrentLead}>
                       <Phone className="w-6 h-6" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={handleSkip}><SkipForward className="w-4 h-4 mr-1" />Skip</Button>
                   </>
                 ) : (
-                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={handleHangUp}>
+                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={() => hangUp()}>
                     <PhoneOff className="w-6 h-6" />
                   </Button>
                 )}
