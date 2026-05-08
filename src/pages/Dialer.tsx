@@ -16,8 +16,6 @@ import { CalendarPlus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useDialerQueue } from "@/hooks/use-dialer-queue";
 import { useDialerQueue as useAgentDailyQueue } from "@/hooks/useDialerQueue";
-import { useTelnyx } from "@/hooks/use-telnyx";
-import { useTelnyxDialer } from "@/hooks/useTelnyxDialer";
 import { useAgentStatus, isCallableStatus, getStatusMeta } from "@/hooks/use-agent-status";
 import { useCampaignPhones } from "@/hooks/use-campaign-phones";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
@@ -124,78 +122,36 @@ export default function Dialer() {
 
   const { phones, getNextOutboundNumber, markUsed } = useCampaignPhones(campaignId);
 
-  const {
-    isRegistered,
-    isCallActive,
-    callDuration,
-    connectionStatus,
-    connect,
-    dial,
-    hangUp,
-  } = useTelnyxDialer();
+  // ---------------------------------------------------------------------------
+  // Telnyx / WebRTC wiring removed — replaced with placeholder state & no-op
+  // handlers so the UI continues to render. Re-attach real telephony later.
+  // ---------------------------------------------------------------------------
+  const isRegistered = false;
+  const isCallActive = false;
+  const callDuration = 0;
+  const connectionStatus: "disconnected" | "connecting" | "connected" = "disconnected";
+  const connectionState: "disconnected" | "connecting" | "connected" | "not_configured" | "error" = "disconnected";
+  const clientReady = false;
+  const callState: "idle" | "ringing" | "connecting" | "active" | "ended" = "idle";
+  const muted = false;
+  const held = false;
+  const errorMessage: string | null = null;
 
-  useEffect(() => {
-    connect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const handleDial = () => {};
+  const handleHangUp = () => {};
 
-  const {
-    connectionState, clientReady, callState, muted, held, errorMessage,
-    makeCall, hangup, toggleMute, toggleHold, sendDTMF,
-  } = useTelnyx({
-    onCallStarted: () => {
-      toast({ title: "Call connected", description: manualCallActive ? `Speaking with ${formatPhoneDisplay(manualDialedE164)}` : "You are now speaking with the lead." });
-      if (user) updateStatus(user.id, "on_call").catch(() => {});
-      refreshProfile();
-    },
-    onCallEnded: (duration) => {
-      setLastCallDuration(duration);
-      toast({ title: "Call ended", description: `Duration: ${Math.floor(duration / 60)}m ${duration % 60}s` });
+  // Aliases preserved so existing call sites keep type-checking as no-ops.
+  const connect = () => {};
+  const dial: (..._args: any[]) => void = () => {};
+  const hangUp = handleHangUp;
+  const hangup = handleHangUp;
+  const makeCall: (..._args: any[]) => void = () => {};
+  const toggleMute = () => {};
+  const toggleHold = () => {};
+  const sendDTMF: (..._args: any[]) => void = () => {};
 
-      if (manualCallActive) {
-        // Fire-and-forget manual call log
-        supabase.auth.getSession().then(({ data: session }) => {
-          const userId = session?.session?.user?.id;
-          supabase.from("call_attempts").insert({
-            agent_id: userId || null,
-            campaign_id: campaignId,
-            contact_id: manualMatchedContact?.contact_id || null,
-            started_at: new Date(Date.now() - duration * 1000).toISOString(),
-            ended_at: new Date().toISOString(),
-            duration_seconds: duration,
-            call_source: "manual",
-            manual_dialed_number: manualDialedRaw,
-            manual_dialed_e164: manualDialedE164,
-            outbound_number_used: lastOutboundNumber,
-            provider_used: "telnyx",
-            dial_mode_used: "manual",
-            notes: notes || null,
-          } as any).select("id").single().then(({ data }) => {
-            if (data?.id) setLastCallAttemptId(data.id);
-          });
-        });
-        setManualCallActive(false);
-        setManualDialedRaw("");
-        setManualDialedE164("");
-        setManualMatchedContact(null);
-      }
-
-      if (user) updateStatus(user.id, "wrap_up").catch(() => {});
-      refreshProfile();
-
-      // Open post-call wrap-up modal for queue calls (not manual)
-      if (currentLead && duration > 5) {
-        setShowWrapUp(true);
-      }
-    },
-    onError: (msg) => {
-      toast({ title: "Call error", description: msg, variant: "destructive" });
-      setManualCallActive(false);
-    },
-  });
-
-  const onCall = callState === "active" || callState === "connecting" || callState === "ringing";
-  const canMakeCalls = clientReady && agentReady && !onCall;
+  const onCall = false;
+  const canMakeCalls = false;
 
   // Load campaigns once
   useEffect(() => {
@@ -626,13 +582,13 @@ export default function Dialer() {
                         "";
                       const campaignCallerNumber = lastOutboundNumber || "";
                       dial(currentLeadPhoneNumber, campaignCallerNumber);
-                    }} disabled={!isRegistered || !dailyCurrentLead}>
+                    }} disabled={!isRegistered || !dailyCurrentLead} onClickCapture={handleDial}>
                       <Phone className="w-6 h-6" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={handleSkip}><SkipForward className="w-4 h-4 mr-1" />Skip</Button>
                   </>
                 ) : (
-                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={() => hangUp()}>
+                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={handleHangUp}>
                     <PhoneOff className="w-6 h-6" />
                   </Button>
                 )}
