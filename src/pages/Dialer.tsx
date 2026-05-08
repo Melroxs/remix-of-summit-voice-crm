@@ -131,9 +131,11 @@ export default function Dialer() {
     isCallActive,
     callDuration,
     connectionStatus,
+    awaitingDisposition,
     connect,
     dial,
     hangUp,
+    submitDisposition,
   } = useTelnyxDialer();
 
   // Convenience aliases — UI references these names in several places.
@@ -637,7 +639,15 @@ export default function Dialer() {
               </Button>
             </div>
           )}
-          {!manualCallActive && <DispositionPanel disabled={!currentLead} onDispose={handleDispose} />}
+          {!manualCallActive && awaitingDisposition && (
+            <DispositionPanel
+              disabled={false}
+              onDispose={(code) => {
+                submitDisposition(code);
+                handleDispose(code);
+              }}
+            />
+          )}
         </div>
 
         {/* Right Panel */}
