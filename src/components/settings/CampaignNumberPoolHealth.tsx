@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+
 import {
   Table,
   TableBody,
@@ -150,11 +150,12 @@ export default function CampaignNumberPoolHealth() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Progress
-                        value={row.health_score}
-                        className="h-2 w-32"
-                        indicatorClassName={healthBarColor(row.health_score)}
-                      />
+                      <div className="h-2 w-32 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className={`h-full ${healthBarColor(row.health_score)}`}
+                          style={{ width: `${row.health_score}%` }}
+                        />
+                      </div>
                       <span className="text-xs text-muted-foreground tabular-nums w-8">
                         {row.health_score}
                       </span>
@@ -255,11 +256,12 @@ export default function CampaignNumberPoolHealth() {
                   <span className="text-muted-foreground">Current health score</span>
                   <span>{auditTarget.health_score}</span>
                 </div>
-                <Progress
-                  value={auditTarget.health_score}
-                  className="h-2"
-                  indicatorClassName={healthBarColor(auditTarget.health_score)}
-                />
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={`h-full ${healthBarColor(auditTarget.health_score)}`}
+                    style={{ width: `${auditTarget.health_score}%` }}
+                  />
+                </div>
               </div>
             </div>
           )}
