@@ -40,12 +40,11 @@ Deno.serve(async (req) => {
       const { error } = await supabase.from("call_recordings").insert({
         recording_url: recordingUrl,
         telnyx_call_control_id: callControlId,
+        connection_id: connectionId,
         duration_seconds: callDuration,
         created_at: new Date().toISOString(),
       });
       if (error) console.error("[telnyx-webhook] recordings insert error:", error.message);
-      // connection_id has no column on call_recordings; logging only
-      console.log("[telnyx-webhook] recording connection_id:", connectionId);
     } else if (eventType === "call.hangup") {
       const callControlId: string | null = payload?.call_control_id ?? null;
       const callDuration: number | null =
