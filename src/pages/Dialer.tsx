@@ -160,7 +160,8 @@ export default function Dialer() {
   const isConnected = isRegistered;
   const hangup = hangUp;
   const handleHangUp = hangUp;
-  const makeCall: (..._args: any[]) => void = (n: string) => dial(n, "");
+  const makeCall: (..._args: any[]) => void = (n: string, from?: string) =>
+    dial(n, from || lastOutboundNumber || "");
 
   // Features not yet exposed by useTelnyxDialer — keep harmless defaults so
   // the existing UI keeps rendering without layout/markup changes.
@@ -234,8 +235,8 @@ export default function Dialer() {
     const timer = setTimeout(async () => {
       if (onCall) return;
       console.log(`[Dialer] ⚡ Auto-dialing ${currentLead.first_name} ${currentLead.last_name}`);
-      await getOutboundCallerId();
-      makeCall(phone);
+      const from = await getOutboundCallerId();
+      makeCall(phone, from || undefined);
     }, 800);
     return () => clearTimeout(timer);
   }, [currentLead, onCall, clientReady, getOutboundCallerId, makeCall]);
@@ -254,8 +255,8 @@ export default function Dialer() {
     if (!agentReady) { toast({ title: "Not ready", variant: "destructive" }); return; }
     const phone = currentLead.phone_e164 || currentLead.phone_raw;
     if (!phone) { toast({ title: "No phone number", variant: "destructive" }); return; }
-    await getOutboundCallerId();
-    makeCall(phone);
+    const from = await getOutboundCallerId();
+    makeCall(phone, from || undefined);
   }, [currentLead, agentReady, makeCall, getOutboundCallerId]);
 
   const handleManualDial = useCallback(async (e164: string, raw: string) => {
@@ -278,8 +279,8 @@ export default function Dialer() {
         });
       } else { setManualMatchedContact(null); }
     } catch { setManualMatchedContact(null); }
-    await getOutboundCallerId();
-    makeCall(e164);
+    const from = await getOutboundCallerId();
+    makeCall(e164, from || undefined);
   }, [canMakeCalls, makeCall, getOutboundCallerId]);
 
   const handleEndCall = () => { hangup(); };
