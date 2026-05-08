@@ -57,6 +57,19 @@ Deno.serve(async (req) => {
       return json({ error: "destinationNumber and callerNumber are required" }, 400);
     }
 
+    // --- Server-side E.164 + toll-fraud validation ---
+    const e164Re = /^\+1[2-9]\d{9}$/;
+    const blockedPrefixes = ["+1900", "+1976", "+1242", "+1268", "+1284", "+1340", "+1345", "+1441", "+1473", "+1649", "+1664", "+1670", "+1671", "+1684", "+1721", "+1758", "+1767", "+1784", "+1809", "+1829", "+1849", "+1868", "+1869", "+1876", "+1939"];
+    if (typeof destinationNumber !== "string" || !e164Re.test(destinationNumber)) {
+      return json({ error: "destinationNumber must be a valid US E.164 number (+1XXXXXXXXXX)" }, 400);
+    }
+    if (blockedPrefixes.some((p) => destinationNumber.startsWith(p))) {
+      return json({ error: "Destination number is blocked (premium-rate or restricted prefix)" }, 400);
+    }
+    if (typeof callerNumber !== "string" || !e164Re.test(callerNumber)) {
+      return json({ error: "callerNumber must be a valid US E.164 number (+1XXXXXXXXXX)" }, 400);
+    }
+
     // --- Local presence number selection ---
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
