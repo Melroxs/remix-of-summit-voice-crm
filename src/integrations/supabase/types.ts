@@ -1819,6 +1819,41 @@ export type Database = {
           },
         ]
       }
+      dialer_logs: {
+        Row: {
+          campaign_id: string | null
+          created_at: string
+          destination_number: string
+          id: string
+          selected_number: string
+          selection_reason: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          created_at?: string
+          destination_number: string
+          id?: string
+          selected_number: string
+          selection_reason: string
+        }
+        Update: {
+          campaign_id?: string | null
+          created_at?: string
+          destination_number?: string
+          id?: string
+          selected_number?: string
+          selection_reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dialer_logs_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dispositions: {
         Row: {
           active: boolean | null
