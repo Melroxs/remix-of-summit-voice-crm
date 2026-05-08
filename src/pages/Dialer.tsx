@@ -23,6 +23,7 @@ import { useCampaignPhones } from "@/hooks/use-campaign-phones";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
 import { formatPhoneDisplay } from "@/lib/phone";
 import LeadCard from "@/components/dialer/LeadCard";
+import CallHistoryPanel from "@/components/dialer/CallHistoryPanel";
 import ContactActivityTimeline from "@/components/dialer/ContactActivityTimeline";
 import DispositionPanel from "@/components/dialer/DispositionPanel";
 import CallbackModal from "@/components/dialer/CallbackModal";
@@ -603,6 +604,8 @@ export default function Dialer() {
               </Card>
             )
           )}
+
+          <CallHistoryPanel contactId={activeContactId} />
 
           <Card>
             <CardContent className="py-6">
