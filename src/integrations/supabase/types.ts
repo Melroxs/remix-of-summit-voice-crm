@@ -1042,6 +1042,8 @@ export type Database = {
       campaign_contacts: {
         Row: {
           assigned_agent_id: string | null
+          assigned_date: string | null
+          assignment_status: string | null
           attempts: number | null
           callback_at: string | null
           campaign_id: string
@@ -1057,6 +1059,8 @@ export type Database = {
         }
         Insert: {
           assigned_agent_id?: string | null
+          assigned_date?: string | null
+          assignment_status?: string | null
           attempts?: number | null
           callback_at?: string | null
           campaign_id: string
@@ -1072,6 +1076,8 @@ export type Database = {
         }
         Update: {
           assigned_agent_id?: string | null
+          assigned_date?: string | null
+          assignment_status?: string | null
           attempts?: number | null
           callback_at?: string | null
           campaign_id?: string
@@ -2491,6 +2497,24 @@ export type Database = {
       }
     }
     Views: {
+      campaign_lead_availability: {
+        Row: {
+          assigned_leads: number | null
+          available_leads: number | null
+          campaign_id: string | null
+          completed_leads: number | null
+          total_leads: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_contacts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_accounts: {
         Row: {
           created_at: string | null
@@ -2601,6 +2625,14 @@ export type Database = {
       }
     }
     Functions: {
+      bulk_assign_leads: {
+        Args: { p_agent_id: string; p_campaign_id: string; p_quantity: number }
+        Returns: number
+      }
+      bulk_unassign_leads: {
+        Args: { p_agent_id: string; p_campaign_id: string; p_quantity: number }
+        Returns: number
+      }
       complete_dial_attempt: {
         Args: {
           _call_attempt_id: string
