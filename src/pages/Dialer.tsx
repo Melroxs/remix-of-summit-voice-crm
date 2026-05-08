@@ -16,6 +16,7 @@ import { CalendarPlus } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useDialerQueue } from "@/hooks/use-dialer-queue";
 import { useTelnyx } from "@/hooks/use-telnyx";
+import { useTelnyxDialer } from "@/hooks/useTelnyxDialer";
 import { useAgentStatus, isCallableStatus, getStatusMeta } from "@/hooks/use-agent-status";
 import { useCampaignPhones } from "@/hooks/use-campaign-phones";
 import { AgentStatusSelector } from "@/components/agents/AgentStatusSelector";
@@ -46,7 +47,7 @@ export default function Dialer() {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showTechApptModal, setShowTechApptModal] = useState(false);
   const [pendingDisposition, setPendingDisposition] = useState<string | null>(null);
-  const [callDuration, setCallDuration] = useState(0);
+  const [lastCallDuration, setLastCallDuration] = useState(0);
   const [showWrapUp, setShowWrapUp] = useState(false);
   const [lastCallAttemptId, setLastCallAttemptId] = useState<string | null>(null);
   const [campaignScripts, setCampaignScripts] = useState<{ id: string; title: string; body: string }[]>([]);
@@ -82,6 +83,21 @@ export default function Dialer() {
   const { phones, getNextOutboundNumber, markUsed } = useCampaignPhones(campaignId);
 
   const {
+    isRegistered,
+    isCallActive,
+    callDuration,
+    connectionStatus,
+    connect,
+    dial,
+    hangUp,
+  } = useTelnyxDialer();
+
+  useEffect(() => {
+    connect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const {
     connectionState, clientReady, callState, muted, held, errorMessage,
     makeCall, hangup, toggleMute, toggleHold, sendDTMF,
   } = useTelnyx({
@@ -91,7 +107,7 @@ export default function Dialer() {
       refreshProfile();
     },
     onCallEnded: (duration) => {
-      setCallDuration(duration);
+      setLastCallDuration(duration);
       toast({ title: "Call ended", description: `Duration: ${Math.floor(duration / 60)}m ${duration % 60}s` });
 
       if (manualCallActive) {
@@ -387,13 +403,10 @@ export default function Dialer() {
           )}
           <AgentStatusSelector compact />
           <Badge variant="outline" className={
-            connectionState === "ready" ? "text-success border-success/30" :
-            connectionState === "error" ? "text-destructive border-destructive/30" :
-            connectionState === "connecting" ? "text-warning border-warning/30" :
-            "text-muted-foreground"
+            isRegistered ? "text-success border-success/30" : "text-muted-foreground"
           }>
-            {connectionState === "ready" ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
-            {connectionState === "ready" ? "Connected" : connectionState === "connecting" ? "Connecting…" : connectionState === "error" ? "Error" : "Not Configured"}
+            {isRegistered ? <Wifi className="w-3 h-3 mr-1" /> : <WifiOff className="w-3 h-3 mr-1" />}
+            {isRegistered ? "Connected" : "Not Connected"}
           </Badge>
         </div>
       </div>
@@ -529,23 +542,27 @@ export default function Dialer() {
                   <Button size="lg" variant="outline" onClick={handleLoadNext} disabled={!campaignId || loading || !agentReady}>
                     {loading ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <ChevronRight className="w-5 h-5 mr-2" />}Next Lead
                   </Button>
-                ) : !onCall ? (
+                ) : !isCallActive ? (
                   <>
-                    <Button size="lg" className="rounded-full w-16 h-16 bg-success hover:bg-success/90 text-success-foreground" onClick={handleStartCall} disabled={!canMakeCalls}>
+                    <Button size="lg" className="rounded-full w-16 h-16 bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
+                      const currentLeadPhoneNumber = currentLead?.phone_e164 || currentLead?.phone_raw || "";
+                      const campaignCallerNumber = lastOutboundNumber || "";
+                      dial(currentLeadPhoneNumber, campaignCallerNumber);
+                    }} disabled={!canMakeCalls}>
                       <Phone className="w-6 h-6" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={handleSkip}><SkipForward className="w-4 h-4 mr-1" />Skip</Button>
                   </>
                 ) : (
-                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={handleEndCall}>
+                  <Button size="lg" className="rounded-full w-16 h-16 bg-destructive hover:bg-destructive/90" onClick={() => hangUp()}>
                     <PhoneOff className="w-6 h-6" />
                   </Button>
                 )}
               </div>
-              {onCall && (
+              {isCallActive && (
                 <div className="flex items-center justify-center mt-4 gap-2">
                   <Clock className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-sm font-mono text-foreground">{formatTime(callTimer)}</span>
+                  <span className="text-sm font-mono text-foreground">{formatTime(callDuration)}</span>
                   {held && <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">ON HOLD</Badge>}
                   {muted && <Badge variant="outline" className="text-destructive border-destructive/30 text-[10px]">MUTED</Badge>}
                   {powerDialActive && <Badge variant="outline" className="text-warning border-warning/30 text-[10px]">⚡ POWER</Badge>}
@@ -644,7 +661,7 @@ export default function Dialer() {
           contactZip={currentLead.zip_code}
           campaignId={campaignId}
           callAttemptId={lastCallAttemptId}
-          callDuration={callDuration}
+          callDuration={lastCallDuration}
           initialNotes={notes}
           onClose={() => setShowWrapUp(false)}
           onComplete={({ disposition, needsAppointmentModal, needsCallbackModal }) => {
