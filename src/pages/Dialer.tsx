@@ -85,7 +85,39 @@ export default function Dialer() {
     totalAssigned: dailyTotalAssigned,
     contactedToday: dailyContactedToday,
     remainingToday: dailyRemainingToday,
+    currentLead: dailyCurrentLead,
+    advanceToNext: advanceDailyQueue,
   } = useAgentDailyQueue();
+
+  // Flatten the daily-queue lead into the shape expected by <LeadCard />.
+  const dailyLeadCard = dailyCurrentLead
+    ? {
+        id: dailyCurrentLead.campaign_contact_id,
+        contact_id: dailyCurrentLead.contact_id,
+        first_name: dailyCurrentLead.contact?.first_name ?? "",
+        last_name: dailyCurrentLead.contact?.last_name ?? "",
+        phone_e164: dailyCurrentLead.contact?.phone_e164 ?? null,
+        phone_raw: dailyCurrentLead.contact?.phone_raw ?? null,
+        address: dailyCurrentLead.contact?.address ?? null,
+        city: dailyCurrentLead.contact?.city ?? null,
+        state: dailyCurrentLead.contact?.state ?? null,
+        zip_code: dailyCurrentLead.contact?.zip_code ?? null,
+        county: dailyCurrentLead.contact?.county ?? null,
+        title: dailyCurrentLead.contact?.title ?? null,
+        owner_renter: dailyCurrentLead.contact?.owner_renter ?? null,
+        home_value: dailyCurrentLead.contact?.home_value ?? null,
+        household_income: dailyCurrentLead.contact?.household_income ?? null,
+        credit_rating: dailyCurrentLead.contact?.credit_rating ?? null,
+        cool_notes: dailyCurrentLead.contact?.cool_notes ?? null,
+        timezone: dailyCurrentLead.contact?.timezone ?? null,
+        lead_status: dailyCurrentLead.contact?.lead_status ?? null,
+        attempts: dailyCurrentLead.attempts ?? 0,
+        dial_status: null,
+        // extra fields surfaced for this view (LeadCard ignores unknown props)
+        email: dailyCurrentLead.contact?.email ?? null,
+        lead_source: dailyCurrentLead.contact?.lead_source ?? null,
+      } as any
+    : null;
 
   const { phones, getNextOutboundNumber, markUsed } = useCampaignPhones(campaignId);
 
@@ -554,7 +586,7 @@ export default function Dialer() {
               </Card>
             )
           ) : (
-            <LeadCard lead={currentLead} />
+            <LeadCard lead={dailyLeadCard ?? currentLead} />
           )}
 
           <Card>
@@ -567,10 +599,15 @@ export default function Dialer() {
                 ) : !isCallActive ? (
                   <>
                     <Button size="lg" className="rounded-full w-16 h-16 bg-success hover:bg-success/90 text-success-foreground" onClick={() => {
-                      const currentLeadPhoneNumber = currentLead?.phone_e164 || currentLead?.phone_raw || "";
+                      const currentLeadPhoneNumber =
+                        dailyCurrentLead?.contact?.phone_e164 ||
+                        dailyCurrentLead?.contact?.phone_raw ||
+                        currentLead?.phone_e164 ||
+                        currentLead?.phone_raw ||
+                        "";
                       const campaignCallerNumber = lastOutboundNumber || "";
                       dial(currentLeadPhoneNumber, campaignCallerNumber);
-                    }} disabled={!canMakeCalls}>
+                    }} disabled={!isRegistered || !dailyCurrentLead}>
                       <Phone className="w-6 h-6" />
                     </Button>
                     <Button size="sm" variant="ghost" onClick={handleSkip}><SkipForward className="w-4 h-4 mr-1" />Skip</Button>
