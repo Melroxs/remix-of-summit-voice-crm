@@ -40,7 +40,7 @@ export default function LeadAssignment() {
     if (!cid) return;
     const [availRes, agentsRes] = await Promise.all([
       supabase.from("campaign_lead_availability").select("*").eq("campaign_id", cid).maybeSingle(),
-      supabase.from("campaign_agents").select("user_id, profiles:profiles!inner(user_id, display_name, email)").eq("campaign_id", cid),
+      supabase.from("campaign_agents").select("user_id").eq("campaign_id", cid),
     ]);
 
     setStats(
@@ -55,6 +55,16 @@ export default function LeadAssignment() {
 
     const rows = (agentsRes.data ?? []) as any[];
     const userIds = rows.map((r) => r.user_id);
+    let profileMap: Record<string, { display_name: string | null; email: string | null }> = {};
+    if (userIds.length) {
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, email")
+        .in("user_id", userIds);
+      (profs ?? []).forEach((p: any) => {
+        profileMap[p.user_id] = { display_name: p.display_name, email: p.email };
+      });
+    }
     let counts: Record<string, number> = {};
     if (userIds.length) {
       const { data: ccRows } = await supabase
@@ -72,8 +82,8 @@ export default function LeadAssignment() {
     setAgents(
       rows.map((r) => ({
         user_id: r.user_id,
-        display_name: r.profiles?.display_name ?? null,
-        email: r.profiles?.email ?? null,
+        display_name: profileMap[r.user_id]?.display_name ?? null,
+        email: profileMap[r.user_id]?.email ?? null,
         assigned_today: counts[r.user_id] ?? 0,
       })),
     );
