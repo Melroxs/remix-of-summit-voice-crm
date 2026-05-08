@@ -30,6 +30,10 @@ Deno.serve(async (req) => {
 
     console.log("[telnyx-webhook] event:", eventType);
 
+    // Log every webhook hit so the UI test panel can confirm Telnyx is reaching us.
+    let logStatus = "received";
+    let logError: string | null = null;
+
     if (eventType === "call.recording.saved") {
       const recordingUrl: string | null = payload?.recording_urls?.mp3 ?? null;
       const callControlId: string | null = payload?.call_control_id ?? null;
@@ -44,7 +48,13 @@ Deno.serve(async (req) => {
         duration_seconds: callDuration,
         created_at: new Date().toISOString(),
       });
-      if (error) console.error("[telnyx-webhook] recordings insert error:", error.message);
+      if (error) {
+        console.error("[telnyx-webhook] recordings insert error:", error.message);
+        logStatus = "error";
+        logError = error.message;
+      } else {
+        logStatus = "processed";
+      }
     } else if (eventType === "call.hangup") {
       const callControlId: string | null = payload?.call_control_id ?? null;
       const callDuration: number | null =
@@ -62,11 +72,41 @@ Deno.serve(async (req) => {
             to_number: toNumber,
           })
           .eq("telnyx_call_control_id", callControlId);
-        if (error) console.error("[telnyx-webhook] hangup update error:", error.message);
+        if (error) {
+          console.error("[telnyx-webhook] hangup update error:", error.message);
+          logStatus = "error";
+          logError = error.message;
+        } else {
+          logStatus = "processed";
+        }
       }
+    } else {
+      logStatus = "ignored";
     }
+
+    await supabase.from("webhook_events").insert({
+      source: "telnyx",
+      event_type: eventType ?? null,
+      status: logStatus,
+      payload: body ?? {},
+      error: logError,
+    }).then(({ error }) => {
+      if (error) console.error("[telnyx-webhook] webhook_events insert error:", error.message);
+    });
   } catch (err) {
     console.error("[telnyx-webhook] handler error:", err);
+    try {
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      );
+      await supabase.from("webhook_events").insert({
+        source: "telnyx",
+        status: "error",
+        payload: {},
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } catch (_) { /* swallow */ }
   }
 
   // Always 200 to prevent Telnyx retries / duplicates.
