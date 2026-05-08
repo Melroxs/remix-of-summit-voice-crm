@@ -25,8 +25,11 @@ import {
   Wrench,
   CalendarDays,
   UserPlus,
+  GripVertical,
+  Pencil,
+  Check as CheckIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/use-auth";
@@ -67,20 +70,107 @@ const allNavItems: NavItem[] = [
   { to: "/client-portal", icon: Eye, label: "Client Portal", roles: ["client"] },
 ];
 
+const STORAGE_PREFIX = "sidebar.order.";
+
+function loadOrder(role: string | null | undefined): string[] | null {
+  if (!role || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + role);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveOrder(role: string, order: string[]) {
+  try {
+    localStorage.setItem(STORAGE_PREFIX + role, JSON.stringify(order));
+  } catch {/* ignore quota */}
+}
+
+function clearOrder(role: string) {
+  try { localStorage.removeItem(STORAGE_PREFIX + role); } catch {/* ignore */}
+}
+
+function navItemKey(item: NavItem): string {
+  return `${item.to}__${item.label}`;
+}
+
 export default function AppSidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { role, profile, isAdmin, companies, activeCompanyId, setActiveCompanyId, company } = useAuth();
+  const [editingOrder, setEditingOrder] = useState(false);
+  const [order, setOrder] = useState<string[] | null>(null);
+  const [dragKey, setDragKey] = useState<string | null>(null);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
   };
 
-  const navItems = allNavItems.filter(
-    (item) => item.roles.length === 0 || (role && item.roles.includes(role))
+  const visibleItems = useMemo(
+    () => allNavItems.filter((item) => item.roles.length === 0 || (role && item.roles.includes(role))),
+    [role]
   );
+
+  useEffect(() => {
+    setOrder(loadOrder(role));
+  }, [role]);
+
+  const navItems = useMemo(() => {
+    if (!order || order.length === 0) return visibleItems;
+    const byKey = new Map(visibleItems.map((i) => [navItemKey(i), i] as const));
+    const ordered: NavItem[] = [];
+    for (const k of order) {
+      const item = byKey.get(k);
+      if (item) {
+        ordered.push(item);
+        byKey.delete(k);
+      }
+    }
+    // Append any items not in the saved order (e.g. new pages added later)
+    for (const item of byKey.values()) ordered.push(item);
+    return ordered;
+  }, [visibleItems, order]);
+
+  const persistOrder = (next: NavItem[]) => {
+    if (!role) return;
+    const keys = next.map(navItemKey);
+    setOrder(keys);
+    saveOrder(role, keys);
+  };
+
+  const handleDragStart = (key: string) => (e: React.DragEvent) => {
+    setDragKey(key);
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (key: string) => (e: React.DragEvent) => {
+    if (!dragKey || dragKey === key) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  const handleDrop = (key: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!dragKey || dragKey === key) { setDragKey(null); return; }
+    const next = [...navItems];
+    const fromIdx = next.findIndex((i) => navItemKey(i) === dragKey);
+    const toIdx = next.findIndex((i) => navItemKey(i) === key);
+    if (fromIdx < 0 || toIdx < 0) { setDragKey(null); return; }
+    const [moved] = next.splice(fromIdx, 1);
+    next.splice(toIdx, 0, moved);
+    persistOrder(next);
+    setDragKey(null);
+  };
+
+  const resetOrder = () => {
+    if (!role) return;
+    clearOrder(role);
+    setOrder(null);
+  };
 
   return (
     <aside
@@ -133,11 +223,58 @@ export default function AppSidebar() {
           </div>
         )}
 
+        {!collapsed && (
+          <div className="flex items-center justify-between px-1 pb-1">
+            <span className="text-[10px] uppercase tracking-wider text-sidebar-muted">
+              {editingOrder ? "Drag to reorder" : "Menu"}
+            </span>
+            <div className="flex items-center gap-1">
+              {editingOrder && order && (
+                <button
+                  onClick={resetOrder}
+                  className="text-[10px] text-sidebar-muted hover:text-foreground px-1"
+                  title="Reset to default order"
+                >
+                  Reset
+                </button>
+              )}
+              <button
+                onClick={() => setEditingOrder((v) => !v)}
+                className="p-1 rounded hover:bg-sidebar-accent/40 text-sidebar-muted hover:text-foreground"
+                title={editingOrder ? "Done" : "Reorder menu"}
+              >
+                {editingOrder ? <CheckIcon className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+        )}
+
         {navItems.map((item) => {
+          const key = navItemKey(item);
           const isActive = location.pathname === item.to;
+          if (editingOrder && !collapsed) {
+            return (
+              <div
+                key={key}
+                draggable
+                onDragStart={handleDragStart(key)}
+                onDragOver={handleDragOver(key)}
+                onDrop={handleDrop(key)}
+                onDragEnd={() => setDragKey(null)}
+                className={`sidebar-item cursor-grab active:cursor-grabbing select-none ${
+                  dragKey === key ? "opacity-40" : ""
+                }`}
+                title="Drag to reorder"
+              >
+                <GripVertical className="w-4 h-4 shrink-0 text-sidebar-muted" />
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span>{item.label}</span>
+              </div>
+            );
+          }
           return (
             <NavLink
-              key={item.to}
+              key={key}
               to={item.to}
               className={isActive ? "sidebar-item-active" : "sidebar-item"}
               title={item.label}
