@@ -15,6 +15,7 @@ export function useTelnyxDialer() {
 
   const clientRef = useRef<TelnyxRTC | null>(null);
   const activeCallRef = useRef<any>(null);
+  const isCallActiveRef = useRef(false);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastCallIdRef = useRef<string | null>(null);
   const lastCallStartedAtRef = useRef<string | null>(null);
@@ -67,6 +68,7 @@ export function useTelnyxDialer() {
         const state: string = call.state;
         if (state === "active") {
           setIsCallActive(true);
+          isCallActiveRef.current = true;
           setCallDuration(0);
           stopDurationTimer();
           lastCallStartedAtRef.current = new Date().toISOString();
@@ -82,6 +84,7 @@ export function useTelnyxDialer() {
         ) {
           const wasActive = isCallActiveRef.current;
           setIsCallActive(false);
+          isCallActiveRef.current = false;
           activeCallRef.current = null;
           setActiveCall(null);
           stopDurationTimer();
