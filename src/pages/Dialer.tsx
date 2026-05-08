@@ -750,6 +750,15 @@ export default function Dialer() {
           }}
         />
       )}
+      <ScriptDrawer
+        campaignId={campaignId}
+        firstName={
+          dailyCurrentLead?.contact?.first_name ||
+          currentLead?.first_name ||
+          manualMatchedContact?.first_name ||
+          null
+        }
+      />
     </div>
   );
 }
