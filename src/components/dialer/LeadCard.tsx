@@ -60,7 +60,17 @@ export default function LeadCard({ lead }: Props) {
     if (!lead || !form) return;
     setSaving(true);
     try {
-      const updates: Record<string, any> = {
+      const updates: Partial<{
+        first_name: string;
+        last_name: string;
+        email: string | null;
+        address: string | null;
+        city: string | null;
+        state: string | null;
+        zip_code: string | null;
+        phone_e164: string | null;
+        phone_raw: string | null;
+      }> = {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         email: form.email.trim() || null,
