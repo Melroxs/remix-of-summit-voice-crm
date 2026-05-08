@@ -14,6 +14,7 @@ import { UserPlus, Shield, Phone as PhoneIcon, Eye, Users, Pencil, Trash2, Power
 import { toast } from "@/hooks/use-toast";
 import { AgentStatusBadge } from "@/components/agents/AgentStatusSelector";
 import DeleteConfirmDialog from "@/components/contacts/DeleteConfirmDialog";
+import UnassignedProfilesBanner from "@/components/admin/UnassignedProfilesBanner";
 
 interface UserRow {
   user_id: string;
@@ -228,6 +229,8 @@ export default function UserManagement() {
         </div>
         <Button onClick={() => { resetForm(); setShowCreate(true); }}><UserPlus className="w-4 h-4 mr-2" />Add User</Button>
       </div>
+
+      <UnassignedProfilesBanner />
 
       <div className="flex gap-3 items-center">
         <Filter className="w-4 h-4 text-muted-foreground" />
