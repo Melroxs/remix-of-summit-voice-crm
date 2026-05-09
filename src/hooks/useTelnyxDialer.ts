@@ -26,6 +26,10 @@ export function useTelnyxDialer() {
     useState<ConnectionStatus>("disconnected");
   const [awaitingDisposition, setAwaitingDisposition] = useState(false);
   const [callTimeline, setCallTimeline] = useState<CallTimelineEntry[]>([]);
+  // Raw Telnyx call.state value (e.g. "new" | "trying" | "ringing" |
+  // "active" | "held" | "hangup" | "destroy"). Exposed for UI that wants
+  // to render the current state directly without re-deriving from booleans.
+  const [activeCallState, setActiveCallState] = useState<string | null>(null);
 
   const clientRef = useRef<TelnyxRTC | null>(null);
   const activeCallRef = useRef<any>(null);
@@ -69,6 +73,15 @@ export function useTelnyxDialer() {
         password: data.password,
       });
 
+      // Required for inbound audio playback in the browser. The dialer page
+      // renders <audio id="remoteMedia" autoPlay />; the SDK attaches the
+      // remote MediaStream to it. Without this, agents cannot hear leads.
+      try {
+        (client as any).remoteElement = "remoteMedia";
+      } catch (e) {
+        console.warn("[useTelnyxDialer] failed to set remoteElement", e);
+      }
+
       client.on("telnyx.ready", () => {
         setIsRegistered(true);
         setConnectionStatus("connected");
@@ -91,6 +104,7 @@ export function useTelnyxDialer() {
         if (activeCallRef.current && call.id !== activeCallRef.current.id) return;
 
         const state: string = call.state;
+        setActiveCallState(state);
         if (state === "new" || state === "trying" || state === "requesting") {
           pushTimeline("initiated");
         } else if (state === "ringing" || state === "early") {
@@ -120,6 +134,8 @@ export function useTelnyxDialer() {
           setActiveCall(null);
           stopDurationTimer();
           setCallDuration(0);
+          // Clear the raw state shortly after terminal events so UI resets.
+          setActiveCallState(null);
           // Only prompt for disposition if the call was actually connected.
           if (wasActive) setAwaitingDisposition(true);
         }
@@ -140,6 +156,7 @@ export function useTelnyxDialer() {
 
       // Fresh timeline for each new call.
       setCallTimeline([{ stage: "initiated", at: new Date().toISOString() }]);
+      setActiveCallState("new");
 
       const call: any = client.newCall({
         destinationNumber: phoneNumber,
@@ -206,6 +223,7 @@ export function useTelnyxDialer() {
     connectionStatus,
     awaitingDisposition,
     callTimeline,
+    activeCallState,
     telnyxCallId: lastCallIdRef.current,
     connect,
     dial,
