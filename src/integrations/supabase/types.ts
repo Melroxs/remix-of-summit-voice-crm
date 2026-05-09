@@ -1303,6 +1303,54 @@ export type Database = {
           },
         ]
       }
+      client_notes: {
+        Row: {
+          author_id: string | null
+          author_name: string | null
+          body: string
+          client_id: string
+          company_id: string | null
+          created_at: string
+          id: string
+          job_card_id: string | null
+        }
+        Insert: {
+          author_id?: string | null
+          author_name?: string | null
+          body: string
+          client_id: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          job_card_id?: string | null
+        }
+        Update: {
+          author_id?: string | null
+          author_name?: string | null
+          body?: string
+          client_id?: string
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          job_card_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_notes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_notes_job_card_id_fkey"
+            columns: ["job_card_id"]
+            isOneToOne: false
+            referencedRelation: "job_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_notifications: {
         Row: {
           body: string | null
@@ -1378,6 +1426,63 @@ export type Database = {
           },
         ]
       }
+      client_photos: {
+        Row: {
+          caption: string | null
+          client_id: string
+          company_id: string | null
+          file_name: string | null
+          id: string
+          job_card_id: string | null
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+          uploaded_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          caption?: string | null
+          client_id: string
+          company_id?: string | null
+          file_name?: string | null
+          id?: string
+          job_card_id?: string | null
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          caption?: string | null
+          client_id?: string
+          company_id?: string | null
+          file_name?: string | null
+          id?: string
+          job_card_id?: string | null
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_photos_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_photos_job_card_id_fkey"
+            columns: ["job_card_id"]
+            isOneToOne: false
+            referencedRelation: "job_cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_users: {
         Row: {
           client_account_id: string
@@ -1410,6 +1515,88 @@ export type Database = {
             columns: ["client_account_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clients: {
+        Row: {
+          address: string | null
+          city: string | null
+          company_id: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          created_from_appointment_id: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          phone_e164: string | null
+          source: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["client_status"]
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          city?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_from_appointment_id?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          phone_e164?: string | null
+          source?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          city?: string | null
+          company_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          created_from_appointment_id?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          phone_e164?: string | null
+          source?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["client_status"]
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clients_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "client_contact_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_created_from_appointment_id_fkey"
+            columns: ["created_from_appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]
@@ -1982,6 +2169,104 @@ export type Database = {
           title?: string
         }
         Relationships: []
+      }
+      job_cards: {
+        Row: {
+          address: string | null
+          appointment_id: string | null
+          city: string | null
+          client_id: string
+          company_id: string | null
+          completed_at: string | null
+          contact_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          job_number: string
+          job_type: string | null
+          notes: string | null
+          sale_amount: number | null
+          scheduled_at: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["job_card_status"]
+          updated_at: string
+          urgency: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          appointment_id?: string | null
+          city?: string | null
+          client_id: string
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          job_number?: string
+          job_type?: string | null
+          notes?: string | null
+          sale_amount?: number | null
+          scheduled_at?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["job_card_status"]
+          updated_at?: string
+          urgency?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          appointment_id?: string | null
+          city?: string | null
+          client_id?: string
+          company_id?: string | null
+          completed_at?: string | null
+          contact_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          job_number?: string
+          job_type?: string | null
+          notes?: string | null
+          sale_amount?: number | null
+          scheduled_at?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["job_card_status"]
+          updated_at?: string
+          urgency?: string | null
+          zip_code?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_cards_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_cards_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_cards_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "client_contact_view"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_cards_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lead_import_rows: {
         Row: {
@@ -2963,6 +3248,7 @@ export type Database = {
         | "failed"
       callback_status: "pending" | "completed" | "missed" | "cancelled"
       campaign_status: "draft" | "active" | "paused" | "completed" | "archived"
+      client_status: "active" | "closed" | "archived"
       daily_assignment_status:
         | "new"
         | "assigned"
@@ -2996,6 +3282,7 @@ export type Database = {
         | "processing"
         | "completed"
         | "failed"
+      job_card_status: "open" | "in_progress" | "completed" | "cancelled"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "dead"
       note_type:
         | "call_note"
@@ -3212,6 +3499,7 @@ export const Constants = {
       ],
       callback_status: ["pending", "completed", "missed", "cancelled"],
       campaign_status: ["draft", "active", "paused", "completed", "archived"],
+      client_status: ["active", "closed", "archived"],
       daily_assignment_status: [
         "new",
         "assigned",
@@ -3249,6 +3537,7 @@ export const Constants = {
         "completed",
         "failed",
       ],
+      job_card_status: ["open", "in_progress", "completed", "cancelled"],
       lead_status: ["new", "contacted", "qualified", "converted", "dead"],
       note_type: [
         "call_note",

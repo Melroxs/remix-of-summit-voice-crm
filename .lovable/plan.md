@@ -1,94 +1,74 @@
-## Technician Appointment Calendar
+## Goal
+When an appointment is booked (status flows through scheduled → completed/sold), generate a **Sale Job Card** that creates/links a **Client Profile** containing all lead + client info. The client profile UI has 4 tabs: Client Details, Notes, Job Card History, Job Card Photos. Notes are timestamped with author. Photos can be uploaded to the profile *and* attached to a specific job card.
 
-Add a new feature to schedule on-site technician appointments with skills matching, working hours awareness, and a visual calendar view. This complements the existing Appointments page (which tracks sales/closer appointments) by adding a dedicated technician dispatch layer.
-
-### What we'll build
-
-**New page: `/technicians/calendar`** (admin + manager + team_leader access)
-
-- **Technician roster panel** (left): list of technicians with name, skills (chips), home address, and working hours.
-- **Calendar view** (right): day / week toggle using `react-day-picker` + a custom time-grid. Each technician gets a column in week view; appointments render as colored blocks.
-- **Create / edit appointment dialog**: pick technician, lead (searchable from existing `contacts`), start/end time, address (defaults to lead address). Validates against:
-  - Technician working hours
-  - Required skill vs. technician skills
-  - Overlap with other appointments for the same technician
-- **Drag-to-reschedule** (phase 2 — not in this plan)
-
-### Data model (new tables)
+## Data model (new tables)
 
 ```text
-technicians
-  id, company_id, user_id (nullable, optional link to profiles)
-  name, home_address, phone, email
-  skills text[]                -- e.g. {'solar_install','roof_inspection'}
-  working_hours_start time     -- 08:00
-  working_hours_end time       -- 17:00
-  working_days int[]           -- 0=Sun..6=Sat, default {1,2,3,4,5}
-  is_active bool
-  created_at, updated_at
+clients
+  id, contact_id (FK), company_id, appointment_id (origin), 
+  first_name, last_name, email, phone_e164, address, city, state, zip,
+  job_type, urgency, source, status (active/closed),
+  created_from_appointment_id, created_at, updated_at, created_by
 
-technician_appointments
-  id, company_id
-  technician_id  -> technicians.id
-  contact_id     -> contacts.id (the lead)
-  campaign_id    -> campaigns.id (nullable)
-  appointment_id -> appointments.id (nullable, link to sales appointment)
-  lead_address text
-  start_time timestamptz
-  end_time   timestamptz
-  required_skill text
-  status: scheduled | en_route | on_site | completed | cancelled | no_show
-  notes text
-  created_by uuid
-  created_at, updated_at
+job_cards
+  id, client_id (FK), company_id, appointment_id, contact_id,
+  job_number (auto, e.g. JC-0001), job_type, status (open/in_progress/completed/cancelled),
+  scheduled_at, completed_at, sale_amount, notes, created_by, created_at, updated_at
+
+client_notes
+  id, client_id, job_card_id (nullable), company_id,
+  author_id, author_name (snapshot), body, created_at
+
+client_photos
+  id, client_id, job_card_id (nullable, when set photo attaches to card too),
+  company_id, storage_path, file_name, mime_type, size_bytes,
+  uploaded_by, uploaded_at, caption
 ```
 
-**RLS**: company-scoped via `is_same_company(company_id)` (matches existing pattern). Admins bypass. Agents read-only on technicians of their company; admins/managers/team_leaders full CRUD.
+Storage bucket `client-photos` (private) with RLS — admins/managers/agents in same company can read/write their company files.
 
-**Validation trigger** (not CHECK constraint, per project standards): ensure `end_time > start_time` and no overlapping technician_appointments for the same technician.
+## Workflow trigger
 
-### Files to add
+Trigger: when an `appointments` row is inserted **or** transitions to `status='completed'` (configurable — default: on insert, so the job card exists from booking and gets updated as the appointment progresses).
 
-- `supabase/migrations/<ts>_technicians.sql` — tables, RLS, overlap-prevention trigger
-- `src/hooks/use-technicians.ts` — list/create/update/delete technicians
-- `src/hooks/use-technician-appointments.ts` — list by date range + mutations
-- `src/components/technicians/TechnicianModal.tsx` — create/edit technician
-- `src/components/technicians/TechnicianAppointmentModal.tsx` — create/edit appointment with skill + working-hours validation
-- `src/components/technicians/TechnicianWeekGrid.tsx` — time-grid (8am–6pm, 30-min slots, one column per technician)
-- `src/components/technicians/TechnicianDayView.tsx` — single-day all-tech view
-- `src/pages/TechnicianCalendar.tsx` — page shell with day/week toggle, technician filter, date picker, "New appointment" button
-- Route added in `src/App.tsx` under `RoleGuard` (admin/manager/team_leader)
-- Sidebar entry added in `src/components/layout/AppSidebar.tsx` under the operations section
+A Postgres trigger `appointment_to_job_card`:
+1. Upserts a `clients` row (match by `contact_id`).
+2. Inserts a `job_cards` row linked to client + appointment + contact.
+3. Copies appointment job_type/urgency/address into the new records.
 
-### TypeScript shape mapping
+This means: every booked appointment automatically creates (or updates) a client + a job card.
 
-The user-provided types map to DB rows like this:
+## Frontend
 
-```ts
-// Technician  (DB: technicians)
-//   id, name, home_address -> homeAddress, skills,
-//   working_hours_start/end -> workingHours.{start,end}
+New route `/clients` (list) and `/clients/:id` (profile):
 
-// Appointment (DB: technician_appointments)
-//   id, technician_id -> technicianId, lead_address -> leadAddress,
-//   start_time -> startTime, end_time -> endTime
+- **List page** — searchable table: name, phone, address, last job, status.
+- **Profile page** — header with client + lead summary, plus a `<Tabs>` block:
+  - **Client Details** — editable client/lead info (name, contact, address, source, original appointment link).
+  - **Notes** — timeline of `client_notes` with "Author • date/time" header; "Add note" textarea + save.
+  - **Job Card History** — list of all `job_cards` for the client; click a card → drawer showing card details, status, amount, notes specific to card, and its photos. Inline status update.
+  - **Job Card Photos** — gallery of photos for the client, filterable by "All" / per job card. Upload button → choose which job card (optional) → upload → stored in bucket, row in `client_photos`. Lightbox preview.
 
-// Lead — reuse existing contacts table
-//   contacts.id, contacts.address, plus optional required_skill stored on the appointment
-```
+- **AppointmentModal** — after saving a "completed" or "sold" appointment, show a toast linking to the auto-created job card / client profile.
 
-We'll keep the user's camelCase types as the **UI/domain layer**, with thin mappers to/from snake_case Supabase rows — same pattern as `useAppointments`.
+- **Sidebar** — add "Clients" entry under CRM section, gated to admin/manager/agent.
 
-### Out of scope (can follow up later)
+## Permissions (RLS)
 
-- Route optimisation between technician home address and lead address
-- Drag-and-drop rescheduling
-- Mobile technician app / check-in
-- SMS reminders to technicians
-- Public booking link
+- `clients`, `job_cards`, `client_notes`, `client_photos`: same-company members can read; agents can write notes/photos on records they own or are assigned to; admins/managers full access. Clients (role) get read access only to their own client_account-linked rows (existing pattern).
+- Storage bucket policies match.
 
-### Open questions before building
+## Implementation order
 
-1. Should technicians be linked to existing `profiles` (so a technician can also log in), or kept as standalone records managed by admins?
-2. Should this calendar replace the existing `/appointments` page, live alongside it, or auto-create a technician appointment whenever a sales appointment is booked?
-3. Who should have access — admin only, or also managers and team_leaders?
+1. Migration: new tables + RLS + trigger + storage bucket + storage policies.
+2. Hooks: `use-clients.ts`, `use-job-cards.ts`, `use-client-notes.ts`, `use-client-photos.ts`.
+3. Pages/components: `Clients.tsx`, `ClientProfile.tsx`, tab components (`ClientDetailsTab`, `NotesTab`, `JobCardHistoryTab`, `JobCardPhotosTab`), `JobCardDrawer`, `PhotoUploader`.
+4. Wire route in `App.tsx`, sidebar entry, and link from `AppointmentModal` / `Appointments` page.
+
+## Out of scope (this round)
+
+- Editing the auto-generated job number format / multi-stage workflow rules.
+- Email/SMS notifications when a job card is created.
+- Client-portal visibility of job cards (can add later).
+
+Want me to proceed with the migration first? I'll send the SQL for your approval, then build the UI on top.
