@@ -2173,6 +2173,8 @@ export type Database = {
       job_cards: {
         Row: {
           address: string | null
+          advanced_at: string | null
+          advanced_by: string | null
           appointment_id: string | null
           city: string | null
           client_id: string
@@ -2185,7 +2187,9 @@ export type Database = {
           job_number: string
           job_type: string | null
           notes: string | null
+          quote_details: Json
           sale_amount: number | null
+          sale_disposition: string | null
           scheduled_at: string | null
           state: string | null
           status: Database["public"]["Enums"]["job_card_status"]
@@ -2195,6 +2199,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          advanced_at?: string | null
+          advanced_by?: string | null
           appointment_id?: string | null
           city?: string | null
           client_id: string
@@ -2207,7 +2213,9 @@ export type Database = {
           job_number?: string
           job_type?: string | null
           notes?: string | null
+          quote_details?: Json
           sale_amount?: number | null
+          sale_disposition?: string | null
           scheduled_at?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["job_card_status"]
@@ -2217,6 +2225,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          advanced_at?: string | null
+          advanced_by?: string | null
           appointment_id?: string | null
           city?: string | null
           client_id?: string
@@ -2229,7 +2239,9 @@ export type Database = {
           job_number?: string
           job_type?: string | null
           notes?: string | null
+          quote_details?: Json
           sale_amount?: number | null
+          sale_disposition?: string | null
           scheduled_at?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["job_card_status"]
@@ -3282,7 +3294,12 @@ export type Database = {
         | "processing"
         | "completed"
         | "failed"
-      job_card_status: "open" | "in_progress" | "completed" | "cancelled"
+      job_card_status:
+        | "open"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+        | "quote"
       lead_status: "new" | "contacted" | "qualified" | "converted" | "dead"
       note_type:
         | "call_note"
@@ -3537,7 +3554,13 @@ export const Constants = {
         "completed",
         "failed",
       ],
-      job_card_status: ["open", "in_progress", "completed", "cancelled"],
+      job_card_status: [
+        "open",
+        "in_progress",
+        "completed",
+        "cancelled",
+        "quote",
+      ],
       lead_status: ["new", "contacted", "qualified", "converted", "dead"],
       note_type: [
         "call_note",
