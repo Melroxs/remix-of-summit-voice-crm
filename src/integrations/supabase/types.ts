@@ -2187,7 +2187,9 @@ export type Database = {
           job_number: string
           job_type: string | null
           notes: string | null
+          parent_job_card_id: string | null
           quote_details: Json
+          quote_disposition: string | null
           sale_amount: number | null
           sale_disposition: string | null
           scheduled_at: string | null
@@ -2213,7 +2215,9 @@ export type Database = {
           job_number?: string
           job_type?: string | null
           notes?: string | null
+          parent_job_card_id?: string | null
           quote_details?: Json
+          quote_disposition?: string | null
           sale_amount?: number | null
           sale_disposition?: string | null
           scheduled_at?: string | null
@@ -2239,7 +2243,9 @@ export type Database = {
           job_number?: string
           job_type?: string | null
           notes?: string | null
+          parent_job_card_id?: string | null
           quote_details?: Json
+          quote_disposition?: string | null
           sale_amount?: number | null
           sale_disposition?: string | null
           scheduled_at?: string | null
@@ -2276,6 +2282,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_cards_parent_job_card_id_fkey"
+            columns: ["parent_job_card_id"]
+            isOneToOne: false
+            referencedRelation: "job_cards"
             referencedColumns: ["id"]
           },
         ]
@@ -3260,7 +3273,7 @@ export type Database = {
         | "failed"
       callback_status: "pending" | "completed" | "missed" | "cancelled"
       campaign_status: "draft" | "active" | "paused" | "completed" | "archived"
-      client_status: "active" | "closed" | "archived"
+      client_status: "active" | "closed" | "archived" | "inactive"
       daily_assignment_status:
         | "new"
         | "assigned"
@@ -3516,7 +3529,7 @@ export const Constants = {
       ],
       callback_status: ["pending", "completed", "missed", "cancelled"],
       campaign_status: ["draft", "active", "paused", "completed", "archived"],
-      client_status: ["active", "closed", "archived"],
+      client_status: ["active", "closed", "archived", "inactive"],
       daily_assignment_status: [
         "new",
         "assigned",
