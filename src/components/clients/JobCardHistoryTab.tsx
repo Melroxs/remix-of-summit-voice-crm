@@ -26,6 +26,11 @@ const DISPOSITION_LABEL: Record<string, string> = {
   solar_installation: "Solar Installation",
 };
 
+const QUOTE_DISPOSITION_LABEL: Record<string, string> = {
+  approved: "Approved",
+  declined: "Declined",
+};
+
 export default function JobCardHistoryTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -119,6 +124,7 @@ function JobCardEditor({ card, onSaved }: { card: any; onSaved: () => void }) {
     sale_amount: card.sale_amount ?? "",
     notes: card.notes || "",
   });
+  const [quoteDisposition, setQuoteDisposition] = useState<string>(card.quote_disposition || "");
 
   const advance = useMutation({
     mutationFn: async () => {
@@ -155,11 +161,37 @@ function JobCardEditor({ card, onSaved }: { card: any; onSaved: () => void }) {
       };
       if (action === "complete") {
         if (!quote.scope || !quote.sale_amount) throw new Error("Scope and sale amount are required to complete the quote.");
+        if (!quoteDisposition) throw new Error("Choose a quote disposition (Approved or Declined).");
         payload.status = "completed";
         payload.completed_at = new Date().toISOString();
+        payload.quote_disposition = quoteDisposition;
       }
       const { error } = await supabase.from("job_cards").update(payload).eq("id", card.id);
       if (error) throw error;
+
+      if (action === "complete") {
+        if (quoteDisposition === "approved") {
+          // Create installation job card for technician to schedule
+          const { error: insErr } = await supabase.from("job_cards").insert({
+            client_id: card.client_id,
+            contact_id: card.contact_id,
+            company_id: card.company_id,
+            job_type: "installation",
+            status: "open",
+            address: card.address,
+            parent_job_card_id: card.id,
+            notes: `Installation for approved quote ${card.job_number}`,
+          });
+          if (insErr) throw insErr;
+        } else if (quoteDisposition === "declined") {
+          // Close client as inactive - no sale
+          const { error: cErr } = await supabase
+            .from("clients")
+            .update({ status: "inactive", source: "no_sale" })
+            .eq("id", card.client_id);
+          if (cErr) throw cErr;
+        }
+      }
     },
     onSuccess: onSaved,
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -255,12 +287,36 @@ function JobCardEditor({ card, onSaved }: { card: any; onSaved: () => void }) {
             <Label>Internal notes</Label>
             <Textarea rows={3} value={quote.notes} onChange={(e) => setQuote({ ...quote, notes: e.target.value })} />
           </div>
+          <div className="space-y-2">
+            <Label>Quote disposition *</Label>
+            <div className="grid grid-cols-1 gap-2">
+              {[
+                { v: "approved", label: "Approved", desc: "Create installation job card for technician scheduling", icon: <CheckCircle2 className="w-4 h-4 text-primary" /> },
+                { v: "declined", label: "Declined", desc: "Close job card and mark client Inactive – No Sale", icon: <XCircle className="w-4 h-4 text-destructive" /> },
+              ].map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setQuoteDisposition(opt.v)}
+                  className={`text-left p-3 rounded-md border transition-colors ${
+                    quoteDisposition === opt.v ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-medium text-sm">
+                    {opt.icon}
+                    {opt.label}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 ml-6">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" disabled={saveQuote.isPending} onClick={() => saveQuote.mutate("save")}>
               Save draft
             </Button>
-            <Button className="flex-1" disabled={saveQuote.isPending} onClick={() => saveQuote.mutate("complete")}>
-              Complete Quote
+            <Button className="flex-1" disabled={saveQuote.isPending || !quoteDisposition} onClick={() => saveQuote.mutate("complete")}>
+              {quoteDisposition === "declined" ? "Close – Declined" : quoteDisposition === "approved" ? "Approve & Create Install" : "Complete Quote"}
             </Button>
           </div>
         </div>
@@ -276,6 +332,9 @@ function JobCardEditor({ card, onSaved }: { card: any; onSaved: () => void }) {
             </div>
             {card.sale_disposition && (
               <div className="text-sm"><span className="text-muted-foreground">Disposition:</span> {DISPOSITION_LABEL[card.sale_disposition]}</div>
+            )}
+            {card.quote_disposition && (
+              <div className="text-sm"><span className="text-muted-foreground">Quote outcome:</span> {QUOTE_DISPOSITION_LABEL[card.quote_disposition]}</div>
             )}
             {card.sale_amount != null && (
               <div className="text-sm"><span className="text-muted-foreground">Sale amount:</span> ${Number(card.sale_amount).toLocaleString()}</div>
