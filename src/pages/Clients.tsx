@@ -5,8 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import PageHeader from "@/components/common/PageHeader";
-import { Briefcase, Search } from "lucide-react";
+import { PageHeader } from "@/components/common/PageHeader";
+import { Search } from "lucide-react";
 
 export default function Clients() {
   const [q, setQ] = useState("");
@@ -34,9 +34,8 @@ export default function Clients() {
   return (
     <div className="space-y-4">
       <PageHeader
-        icon={Briefcase}
         title="Clients"
-        description="Client profiles auto-generated from booked appointments"
+        subtitle="Client profiles auto-generated from booked appointments"
       />
 
       <div className="relative max-w-md">
