@@ -400,6 +400,13 @@ export default function Dialer() {
 
   return (
     <div className="animate-slide-in">
+      {/*
+        Required by the Telnyx WebRTC SDK for inbound audio playback.
+        The hook sets `client.remoteElement = "remoteMedia"` so the SDK
+        attaches the remote MediaStream here. Without this element, the
+        agent cannot hear the lead.
+      */}
+      <audio id="remoteMedia" autoPlay />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="page-header-title">Dialer</h1>
